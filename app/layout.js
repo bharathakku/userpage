@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/layout/header";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { AppProvider } from "@/contexts/AppContext";
 import NotificationContainer from "@/components/ui/notification";
 
@@ -27,9 +28,10 @@ export default function RootLayout({ children }) {
       >
         <AppProvider>
           <Header />
-          <main className="min-h-screen">
+          <main className="min-h-screen pb-16 sm:pb-0">
             {children}
           </main>
+          <MobileBottomNav />
           <NotificationContainer />
         </AppProvider>
       </body>
