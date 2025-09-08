@@ -46,32 +46,32 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Hero Section */}
-        <div className="mb-12">
-          <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 rounded-3xl p-8 shadow-2xl">
+        <div className="mb-8 sm:mb-12">
+          <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 shadow-2xl">
             {/* Background Pattern */}
             <div className="absolute inset-0 bg-blue-600/10 pattern-dots"></div>
             
-            <div className="relative flex items-center justify-between">
-              <div className="flex-1">
+            <div className="relative flex flex-col lg:flex-row items-center justify-between">
+              <div className="flex-1 text-center lg:text-left">
                 <div className="mb-4">
-                  <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">
                     Welcome to YourDelivery! 🚚
                   </h1>
-                  <h2 className="text-4xl md:text-5xl font-bold text-yellow-300 mb-4">
-                    India's Trusted Logistics Partner
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-yellow-300 mb-4">
+                    India&apos;s Trusted Logistics Partner
                   </h2>
-                  <p className="text-blue-100 text-lg mb-6 max-w-lg">
+                  <p className="text-blue-100 text-sm sm:text-base lg:text-lg mb-6 max-w-lg mx-auto lg:mx-0">
                     From documents to heavy cargo - we deliver everything in your city with real-time tracking and verified partners.
                   </p>
                 </div>
                 <Link href="/booking/address">
                   <Button 
-                    className="bg-yellow-400 hover:bg-yellow-500 text-blue-900 font-semibold px-8 py-3 rounded-full text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
+                    className="bg-yellow-400 hover:bg-yellow-500 text-blue-900 font-semibold px-6 sm:px-8 py-2 sm:py-3 rounded-full text-base sm:text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
                   >
                     Book Delivery
-                    <ArrowRight className="w-5 h-5 ml-2" />
+                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
                   </Button>
                 </Link>
               </div>
@@ -149,21 +149,23 @@ export default function Home() {
             <div className="grid md:grid-cols-2 gap-6">
               {/* Wallet Balance */}
               <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white border-0 shadow-xl">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-3 bg-white/20 rounded-full">
+                      <div className="p-3 bg-white/20 rounded-full flex-shrink-0">
                         <Wallet className="w-6 h-6 text-white" />
                       </div>
                       <div>
                         <h4 className="font-semibold text-green-100 text-sm">Wallet Balance</h4>
-                        <p className="text-3xl font-bold text-white">₹5,000</p>
+                        <p className="text-2xl sm:text-3xl font-bold text-white">₹5,000</p>
                       </div>
                     </div>
-                    <Button className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-full">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Money
-                    </Button>
+                    <Link href="/payments">
+                      <Button className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-full text-sm px-4 py-2">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Money
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
@@ -242,6 +244,13 @@ export default function Home() {
                   <Button className="w-full justify-start" variant="outline">
                     <Star className="w-4 h-4 mr-3 text-yellow-600" />
                     <span className="text-gray-700">Rate Service</span>
+                  </Button>
+                </Link>
+                {/* Testing Link for Premium Booking Review */}
+                <Link href="/booking/review">
+                  <Button className="w-full justify-start bg-purple-600 hover:bg-purple-700 text-white rounded-lg">
+                    <Package className="w-4 h-4 mr-3" />
+                    Preview Premium UI
                   </Button>
                 </Link>
               </CardContent>

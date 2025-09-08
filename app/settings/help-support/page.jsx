@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, 
@@ -12,10 +12,160 @@ import {
   HelpCircle,
   FileText,
   Headphones,
-  AlertTriangle
+  AlertTriangle,
+  Send,
+  X,
+  MinusCircle,
+  Maximize
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+// Chat Component
+function ChatWidget() {
+  const [isOpen, setIsOpen] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [message, setMessage] = useState('')
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      text: 'Hello! How can I help you today?',
+      sender: 'agent',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ])
+  const messagesEndRef = useRef(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const sendMessage = () => {
+    if (message.trim()) {
+      const newMessage = {
+        id: messages.length + 1,
+        text: message,
+        sender: 'user',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+      setMessages([...messages, newMessage])
+      setMessage('')
+      
+      // Simulate agent response
+      setTimeout(() => {
+        const response = {
+          id: messages.length + 2,
+          text: 'Thank you for your message. Our team will assist you shortly.',
+          sender: 'agent',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+        setMessages(prev => [...prev, response])
+      }, 1000)
+    }
+  }
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
+  if (!isOpen) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button
+          onClick={() => setIsOpen(true)}
+          className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg flex items-center justify-center"
+        >
+          <MessageCircle className="h-6 w-6 text-white" />
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed bottom-4 right-4 z-50 w-72 sm:w-80 lg:w-96 max-w-[calc(100vw-2rem)]">
+      <Card className={`shadow-xl transition-all duration-300 ${isMinimized ? 'h-16' : 'h-80 sm:h-96'}`}>
+        <CardHeader className="flex flex-row items-center justify-between p-4 bg-blue-600 text-white rounded-t-lg">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5" />
+            <span className="font-medium text-sm">Live Chat Support</span>
+            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsMinimized(!isMinimized)}
+              className="h-8 w-8 p-1 text-white hover:bg-blue-500 rounded"
+            >
+              {isMinimized ? <Maximize className="h-4 w-4" /> : <MinusCircle className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsOpen(false)}
+              className="h-8 w-8 p-1 text-white hover:bg-blue-500 rounded"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        
+        {!isMinimized && (
+          <>
+            <CardContent className="h-64 overflow-y-auto p-4 space-y-3">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-xs p-3 rounded-lg ${
+                      msg.sender === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-900'
+                    }`}
+                  >
+                    <p className="text-sm">{msg.text}</p>
+                    <p className={`text-xs mt-1 opacity-70`}>{msg.time}</p>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </CardContent>
+            
+            <div className="p-4 border-t">
+              <div className="flex items-center gap-2">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  className="flex-1 p-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  rows={1}
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={!message.trim()}
+                  size="sm"
+                  className="h-8 w-8 p-1"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
+  )
+}
 
 export default function HelpSupportPage() {
   const router = useRouter()
@@ -107,8 +257,9 @@ export default function HelpSupportPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Button
@@ -232,5 +383,7 @@ export default function HelpSupportPage() {
         </div>
       </div>
     </div>
+    <ChatWidget />
+    </>
   )
 }

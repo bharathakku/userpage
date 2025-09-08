@@ -66,24 +66,24 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-6 max-w-2xl">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h1>
         </div>
 
         {/* User Profile Section */}
         <Card className="mb-6 border-2 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               {/* Profile Avatar */}
-              <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+              <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
                 <User className="h-8 w-8 text-gray-600" />
               </div>
               
               {/* Profile Info */}
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">
                   {userProfile.name}
                 </h2>
                 <p className="text-sm text-gray-600 mb-1">
@@ -98,7 +98,7 @@ export default function SettingsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                className="text-blue-600 border-blue-300 hover:bg-blue-50 self-start sm:self-center"
               >
                 Edit Profile
               </Button>

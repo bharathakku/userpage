@@ -5,9 +5,31 @@ import { Package, Clock, CheckCircle, XCircle, MapPin, Phone, Truck } from 'luci
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function OrdersPage() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('active')
+
+  const handleTrackLive = (orderId) => {
+    // Navigate to tracking page
+    router.push(`/orders/track/${orderId}`)
+  }
+
+  const handleViewDetails = (orderId) => {
+    // Navigate to order details page
+    router.push(`/orders/details/${orderId}`)
+  }
+
+  const handleRateDriver = (orderId) => {
+    // Navigate to rating page
+    router.push(`/orders/rating/${orderId}`)
+  }
+  
+  const handleViewReceipt = (orderId) => {
+    // Navigate to receipt page
+    router.push(`/orders/receipt/${orderId}`)
+  }
 
   const activeOrders = [
     {
@@ -84,10 +106,10 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-2">Orders</h1>
-        <p className="text-gray-600">Track your deliveries and view order history</p>
+    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-6xl">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold mb-2">Orders</h1>
+        <p className="text-sm sm:text-base text-gray-600">Track your deliveries and view order history</p>
       </div>
 
       {/* Tab Navigation */}
@@ -132,17 +154,17 @@ export default function OrdersPage() {
             activeOrders.map((order) => (
               <Card key={order.id} className="border-l-4 border-l-blue-500">
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        Order #{order.id}
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <CardTitle className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                        <span className="text-base sm:text-lg">Order #{order.id}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium self-start ${getStatusColor(order.status)}`}>
                           {getStatusText(order.status)}
                         </span>
                       </CardTitle>
-                      <CardDescription>{order.vehicle}</CardDescription>
+                      <CardDescription className="text-sm">{order.vehicle}</CardDescription>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       <p className="text-sm text-gray-500">Estimated arrival</p>
                       <p className="font-semibold text-blue-600">{order.estimatedTime}</p>
                     </div>
@@ -190,14 +212,22 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-3 pt-4 border-t">
-                    <Button variant="outline" className="flex-1">
+                  <div className="pt-4 border-t space-y-2 sm:space-y-0 sm:flex sm:gap-3">
+                    <Button 
+                      variant="outline" 
+                      className="w-full sm:flex-1 text-sm"
+                      onClick={() => handleTrackLive(order.id)}
+                    >
                       Track Live
                     </Button>
-                    <Button variant="outline" className="flex-1">
+                    <Button 
+                      variant="outline" 
+                      className="w-full sm:flex-1 text-sm"
+                      onClick={() => handleViewDetails(order.id)}
+                    >
                       View Details
                     </Button>
-                    <Button variant="destructive" className="flex-1">
+                    <Button variant="destructive" className="w-full sm:flex-1 text-sm">
                       Cancel Order
                     </Button>
                   </div>
@@ -251,12 +281,28 @@ export default function OrdersPage() {
                         <p className="font-medium">{order.dropoff}</p>
                       </div>
                     </div>
-                    <div className="flex gap-3 mt-4">
-                      <Button variant="outline" size="sm">View Receipt</Button>
+                    <div className="space-y-2 sm:space-y-0 sm:flex sm:gap-3 mt-4">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full sm:w-auto text-xs sm:text-sm"
+                        onClick={() => handleViewReceipt(order.id)}
+                      >
+                        View Receipt
+                      </Button>
                       {order.status === 'completed' && (
-                        <Button variant="outline" size="sm">Rate & Review</Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full sm:w-auto text-xs sm:text-sm"
+                          onClick={() => handleRateDriver(order.id)}
+                        >
+                          Rate & Review
+                        </Button>
                       )}
-                      <Button variant="outline" size="sm">Rebook</Button>
+                      <Button variant="outline" size="sm" className="w-full sm:w-auto text-xs sm:text-sm">
+                        Rebook
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

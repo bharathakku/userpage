@@ -37,7 +37,7 @@ export default function AddressSelectionPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-6xl">
         {/* Header */}
         <div className="flex items-center mb-6">
           <Link href="/">
@@ -45,7 +45,7 @@ export default function AddressSelectionPage() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <h1 className="text-xl font-semibold">Select Addresses</h1>
+          <h1 className="text-lg sm:text-xl font-semibold">Select Addresses</h1>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">

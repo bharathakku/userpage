@@ -24,11 +24,11 @@ export default function PaymentsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="mb-12">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">Payments & Wallet</h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">Manage your wallet, payment methods, and transaction history</p>
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-6xl">
+        <div className="mb-8 sm:mb-12">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">Payments & Wallet</h1>
+            <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">Manage your wallet, payment methods, and transaction history</p>
           </div>
         </div>
 
@@ -69,9 +69,9 @@ export default function PaymentsPage() {
             <CardContent>
               <div className="space-y-4">
                 {paymentHistory.map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${
+                  <div key={transaction.id} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`p-2 rounded-full flex-shrink-0 ${
                         transaction.type === 'credit' ? 'bg-green-100' : 'bg-red-100'
                       }`}>
                         {transaction.type === 'credit' ? (
@@ -82,17 +82,17 @@ export default function PaymentsPage() {
                           <ArrowUpRight className="h-4 w-4 text-red-600" />
                         )}
                       </div>
-                      <div>
-                        <p className="font-medium">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm sm:text-base">
                           {transaction.type === 'credit' ? 'Money Added' : 'Payment'}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs sm:text-sm text-gray-500">
                           {transaction.date} • {transaction.method}
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`font-semibold ${
+                    <div className="text-left sm:text-right flex-shrink-0">
+                      <p className={`font-semibold text-sm sm:text-base ${
                         transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {transaction.type === 'credit' ? '+' : '-'}₹{transaction.amount}

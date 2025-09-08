@@ -43,10 +43,10 @@ export default function ProfilePage() {
   ]
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-2">Profile</h1>
-        <p className="text-gray-600">Manage your account and preferences</p>
+    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-4xl">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold mb-2">Profile</h1>
+        <p className="text-sm sm:text-base text-gray-600">Manage your account and preferences</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
@@ -55,20 +55,20 @@ export default function ProfilePage() {
           {/* User Profile Card */}
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                   <User className="h-8 w-8 text-white" />
                 </div>
-                <div className="flex-1">
-                  <CardTitle className="text-xl">{userProfile.name}</CardTitle>
-                  <CardDescription className="flex items-center gap-2 mt-1">
-                    <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-sm font-medium">
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-lg sm:text-xl">{userProfile.name}</CardTitle>
+                  <CardDescription className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
+                    <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-sm font-medium w-fit">
                       {userProfile.profileType}
                     </span>
                     <span className="text-sm text-gray-500">Since {userProfile.joinDate}</span>
                   </CardDescription>
                 </div>
-                <Button variant="outline">Edit</Button>
+                <Button variant="outline" className="self-start sm:self-center">Edit</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -118,22 +118,22 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {savedAddresses.map((address) => (
-                <div key={address.id} className="flex items-start justify-between p-4 border rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-gray-500 mt-0.5" />
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
+                <div key={address.id} className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 border rounded-lg">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <MapPin className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
                         <p className="font-medium">{address.type}</p>
                         {address.isDefault && (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs w-fit">
                             Default
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">{address.address}</p>
+                      <p className="text-sm text-gray-600 break-words">{address.address}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm">Edit</Button>
+                  <Button variant="ghost" size="sm" className="self-start sm:self-center flex-shrink-0">Edit</Button>
                 </div>
               ))}
             </CardContent>

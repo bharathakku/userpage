@@ -12,7 +12,6 @@ const navigation = [
   { name: 'Orders', href: '/orders' },
   { name: 'Payments', href: '/payments' },
   { name: 'Settings', href: '/settings' },
-  { name: 'Support', href: '/support' },
 ]
 
 export default function Header() {
@@ -21,7 +20,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
-      <div className="container flex h-16 items-center justify-between px-4 max-w-7xl mx-auto">
+      <div className="container flex h-14 sm:h-16 items-center justify-between px-3 sm:px-4 max-w-7xl mx-auto">
         {/* Logo and Brand */}
         <div className="flex items-center">
           <Link href="/" className="flex items-center space-x-3 group">
