@@ -246,13 +246,6 @@ export default function Home() {
                     <span className="text-gray-700">Rate Service</span>
                   </Button>
                 </Link>
-                {/* Testing Link for Premium Booking Review */}
-                <Link href="/booking/review">
-                  <Button className="w-full justify-start bg-purple-600 hover:bg-purple-700 text-white rounded-lg">
-                    <Package className="w-4 h-4 mr-3" />
-                    Preview Premium UI
-                  </Button>
-                </Link>
               </CardContent>
             </Card>
           </div>

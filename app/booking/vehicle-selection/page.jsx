@@ -14,50 +14,46 @@ export default function VehicleSelectionPage() {
 
   const vehicles = [
     {
-      id: 'ramesh-bike',
-      name: 'Ramesh',
-      vehicleNumber: '7547201177',
+      id: 'two-wheeler',
       type: '2 Wheeler',
+      subtitle: 'Fast & Affordable',
       distance: '7.3 km',
       time: '7 mins',
+      capacity: 'Up to 20 kg',
+      description: 'Perfect for small packages and documents',
       price: 110,
+      originalPrice: 130,
       image: 'https://cdn-icons-png.flaticon.com/512/9561/9561839.png',
-      rating: 4.8
+      available: true,
+      estimatedTime: '7-10 mins'
     },
     {
-      id: 'james-truck',
-      name: 'JAMES',
-      vehicleNumber: '6456551326',
+      id: 'tata-ace',
       type: 'Tata Ace',
+      subtitle: 'Heavy Duty Truck',
       distance: '4.0 km',
       time: '12 mins',
-      description: '(25 Kg • 2.5 mtrs)',
+      capacity: 'Up to 750 kg',
+      description: 'Ideal for furniture, appliances & bulk items',
       price: 495,
+      originalPrice: 520,
       image: 'https://cdn-icons-png.flaticon.com/512/870/870130.png',
-      rating: 4.9
+      available: true,
+      estimatedTime: '12-18 mins'
     },
     {
-      id: 'wheeler-truck',
-      name: 'Arjun',
-      vehicleNumber: '9876543210',
-      type: '3 Wheeler',
+      id: 'three-wheeler',
+      type: '3 Wheeler Auto',
+      subtitle: 'Medium Capacity',
       distance: '5.2 km',
       time: '15 mins',
-      description: '(68 Kg • 20 mtrs)',
-      price: 407,
+      capacity: 'Up to 200 kg',
+      description: 'Great for medium-sized deliveries',
+      price: 320,
+      originalPrice: 380,
       image: 'https://cdn-icons-png.flaticon.com/512/6179/6179815.png',
-      rating: 4.7
-    },
-    {
-      id: 'suresh-bike',
-      name: 'Suresh',
-      vehicleNumber: '8547201234',
-      type: '2 Wheeler',
-      distance: '6.1 km',
-      time: '9 mins',
-      price: 125,
-      image: 'https://cdn-icons-png.flaticon.com/512/9561/9561839.png',
-      rating: 4.6
+      available: true,
+      estimatedTime: '15-20 mins'
     }
   ]
 
@@ -144,51 +140,70 @@ export default function VehicleSelectionPage() {
                 onClick={() => setSelectedVehicle(vehicle.id)}
               >
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4 flex-1">
                       {/* Vehicle Image */}
-                      <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center border border-gray-100 shadow-sm">
+                      <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center border border-gray-100 shadow-sm flex-shrink-0">
                         <Image
                           src={vehicle.image}
                           alt={vehicle.type}
-                          width={40}
-                          height={40}
-                          className="w-10 h-10 object-contain"
+                          width={45}
+                          height={45}
+                          className="w-11 h-11 object-contain"
                           unoptimized
                         />
                       </div>
                       
                       {/* Vehicle Details */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-lg font-bold text-gray-900 truncate">{vehicle.name}</h3>
-                          <span className="text-sm text-gray-500">• {vehicle.vehicleNumber}</span>
+                        <div className="mb-2">
+                          <h3 className="text-lg font-bold text-gray-900 mb-1">{vehicle.type}</h3>
+                          <p className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full inline-block">
+                            {vehicle.subtitle}
+                          </p>
                         </div>
                         
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-gray-700">{vehicle.type}</span>
-                          {vehicle.description && (
-                            <span className="text-sm text-gray-500">{vehicle.description}</span>
-                          )}
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-700">Capacity:</span>
+                            <span>{vehicle.capacity}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-700">ETA:</span>
+                            <span>{vehicle.estimatedTime}</span>
+                          </div>
+                          <p className="text-gray-600 mt-1">{vehicle.description}</p>
                         </div>
                         
-                        <div className="flex items-center gap-3 text-sm text-gray-600">
-                          <span>{vehicle.distance} • {vehicle.time}</span>
-                          {vehicle.rating && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-yellow-500">★</span>
-                              <span>{vehicle.rating}</span>
-                            </div>
-                          )}
-                        </div>
+                        {!vehicle.available && (
+                          <div className="mt-2">
+                            <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
+                              Currently Unavailable
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
                     {/* Price */}
-                    <div className="text-right ml-4">
-                      <div className="text-xl font-bold text-gray-900">₹{vehicle.price}</div>
+                    <div className="text-right ml-4 flex-shrink-0">
+                      <div className="mb-1">
+                        {vehicle.originalPrice && vehicle.originalPrice > vehicle.price && (
+                          <div className="text-sm text-gray-500 line-through">₹{vehicle.originalPrice}</div>
+                        )}
+                        <div className="text-xl font-bold text-gray-900">₹{vehicle.price}</div>
+                      </div>
+                      
+                      {vehicle.originalPrice && vehicle.originalPrice > vehicle.price && (
+                        <div className="text-xs text-green-600 font-medium">
+                          Save ₹{vehicle.originalPrice - vehicle.price}
+                        </div>
+                      )}
+                      
                       {isSelected && (
-                        <div className="text-sm text-blue-600 font-medium mt-1">Selected</div>
+                        <div className="text-sm text-blue-600 font-medium mt-2 bg-blue-100 px-2 py-1 rounded-full">
+                          Selected
+                        </div>
                       )}
                     </div>
                   </div>
