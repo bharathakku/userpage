@@ -19,12 +19,12 @@ const vehicleTypes = [
     hoverGradient: 'group-hover:from-blue-600 group-hover:to-blue-700'
   },
   {
-    id: '2wheeler',
-    name: '2 Wheeler',
-    subtitle: 'Fast local delivery',
-    image: 'https://cdn-icons-png.flaticon.com/512/9561/9561839.png',
-    description: 'Quick deliveries within city',
-    capacity: 'Up to 20 kg',
+    id: 'pickup',
+    name: 'Pickup Truck',
+    subtitle: 'Reliable & Versatile',
+    image: '/images/pickup-truck-flaticon.png',
+    description: 'Perfect for medium to large deliveries',
+    capacity: 'Up to 1000 kg',
     gradient: 'from-green-500 to-green-600',
     hoverGradient: 'group-hover:from-green-600 group-hover:to-green-700'
   },

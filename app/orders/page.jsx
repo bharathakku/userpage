@@ -59,10 +59,10 @@ export default function OrdersPage() {
       id: 'CBN7G53B6003',
       status: 'cancelled',
       date: '2024-01-18',
-      vehicle: '2 Wheeler',
+      vehicle: 'Small Pickup',
       pickup: 'Lajpat Nagar',
       dropoff: 'India Gate',
-      fare: 120
+      fare: 180
     }
   ]
 

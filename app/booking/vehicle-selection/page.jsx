@@ -14,22 +14,22 @@ export default function VehicleSelectionPage() {
 
   const vehicles = [
     {
-      id: 'two-wheeler',
-      type: '2 Wheeler',
-      subtitle: 'Fast & Affordable',
+      id: 'pickup-medium',
+      type: 'Medium Pickup',
+      subtitle: 'Heavy Duty',
       distance: '7.3 km',
-      time: '7 mins',
-      capacity: 'Up to 20 kg',
-      description: 'Perfect for small packages and documents',
-      price: 110,
-      originalPrice: 130,
-      image: 'https://cdn-icons-png.flaticon.com/512/9561/9561839.png',
+      time: '8 mins',
+      capacity: 'Up to 1000 kg',
+      description: 'Perfect for medium to large deliveries',
+      price: 280,
+      originalPrice: 320,
+      image: '/images/pickup-truck-flaticon.png',
       available: true,
-      estimatedTime: '7-10 mins'
+      estimatedTime: '8-12 mins'
     },
     {
-      id: 'tata-ace',
-      type: 'Tata Ace',
+      id: 'heavy-truck',
+      type: 'Heavy Truck',
       subtitle: 'Heavy Duty Truck',
       distance: '4.0 km',
       time: '12 mins',
@@ -42,15 +42,15 @@ export default function VehicleSelectionPage() {
       estimatedTime: '12-18 mins'
     },
     {
-      id: 'three-wheeler',
-      type: '3 Wheeler Auto',
-      subtitle: 'Medium Capacity',
+      id: 'pickup-small',
+      type: 'Small Pickup',
+      subtitle: 'Compact & Efficient',
       distance: '5.2 km',
       time: '15 mins',
-      capacity: 'Up to 200 kg',
-      description: 'Great for medium-sized deliveries',
-      price: 320,
-      originalPrice: 380,
+      capacity: 'Up to 500 kg',
+      description: 'Great for small deliveries',
+      price: 180,
+      originalPrice: 210,
       image: 'https://cdn-icons-png.flaticon.com/512/6179/6179815.png',
       available: true,
       estimatedTime: '15-20 mins'
