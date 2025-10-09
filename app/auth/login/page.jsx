@@ -83,8 +83,29 @@ export default function LoginPage() {
       setSuccess('Login successful!')
       localStorage.setItem('auth_token', data.token)
       localStorage.setItem('user_data', JSON.stringify(data.user))
-      try { document.cookie = `auth_token=${data.token}; Path=/; SameSite=Lax`; } catch {}
-      setTimeout(() => { router.push('/') }, 500)
+      // Write a persistent cookie and ensure it is visible before navigating
+      try {
+        const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+        // 7 days lifetime
+        document.cookie = `auth_token=${data.token}; Path=/; Max-Age=604800; SameSite=Lax${secure}`
+      } catch {}
+      // Wait until the cookie is readable to avoid middleware race
+      const start = Date.now()
+      const waitForCookie = () => {
+        try {
+          if (document.cookie.includes('auth_token=')) {
+            router.push('/')
+            return
+          }
+        } catch {}
+        if (Date.now() - start > 1000) {
+          // Fallback to hard navigation if cookie not detected quickly
+          window.location.href = '/'
+          return
+        }
+        setTimeout(waitForCookie, 50)
+      }
+      waitForCookie()
     } catch (err) {
       setError(err.message || 'Network error. Please try again.')
     } finally {
