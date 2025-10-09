@@ -1,36 +1,132 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowLeft, Truck, MapPin, Clock, CreditCard, Wallet, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Truck, MapPin, Clock, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import OrderService from '@/lib/orderService';
+import { computeFare, formatCurrencyINR, WAITING_RULES } from '@/lib/pricing'
 
 export default function BookingReviewPage() {
   const router = useRouter();
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('wallet');
+  const searchParams = useSearchParams();
+  const { isAuthenticated, user } = useAuth();
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [quoteData, setQuoteData] = useState(null);
+  const [error, setError] = useState('');
+  const [routeData, setRouteData] = useState(null) // { pickup: {lat,lng,address}, drop: {lat,lng,address} | [{...}] , distanceKm }
+  const [waitingMinutes, setWaitingMinutes] = useState(0)
 
-  const bookingDetails = {
-    tripId: 'CBN7G53B6001',
-    vehicle: 'Tata Ace',
-    driver: 'View Address Details',
-    distance: '23 kms away',
-    pickupTime: '70 mins loading/unloading time included',
-    fareBreakdown: {
-      tripFare: 495.09,
-      tollCharge: 0.00,
-      netFare: 495
-    },
-    goodsType: 'Appliances / Electronics / Home Appliances / Electronic ITEMS',
-    estimatedTime: '2 hours 45 mins'
+  // Get vehicle ID from URL params
+  const vehicleId = searchParams.get('vehicleId') || 'two-wheeler';
+
+  useEffect(() => {
+    // Redirect to login if not authenticated
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+
+    // Use route and waiting minutes from localStorage (set in address page)
+    try {
+      const route = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('bookingRoute') || 'null') : null
+      const wm = typeof window !== 'undefined' ? Number(window.localStorage.getItem('waiting_minutes') || '0') : 0
+      if (route) {
+        setRouteData(route)
+        setWaitingMinutes(Number.isFinite(wm) ? wm : 0)
+        const fare = computeFare(vehicleId || 'two-wheeler', route.distanceKm || 0, Number.isFinite(wm) ? wm : 0)
+        setQuoteData({ ...fare })
+        return
+      }
+    } catch {}
+
+    // Fallback: fetch quote from API with default 5km
+    fetchQuote();
+  }, [isAuthenticated, vehicleId]);
+
+  const fetchQuote = async () => {
+    try {
+      const result = await OrderService.getQuote(vehicleId, 5); // Default 5km
+      if (result.success) {
+        // fallback only: map API result to quoteData shape
+        setQuoteData({
+          vehicleId,
+          base: result.data?.base || 0,
+          perKm: result.data?.perKm || 0,
+          distanceKm: result.data?.distanceKm || 5,
+          distanceCharge: result.data?.distanceCharge || 0,
+          waiting: { included: WAITING_RULES[vehicleId]?.included || 0, perMinute: WAITING_RULES[vehicleId]?.perMinute || 0, minCharge: WAITING_RULES[vehicleId]?.minCharge || 0, providedMinutes: 0, overMinutes: 0, extraWaitingCharge: 0 },
+          total: result.data?.total || (result.data?.base || 0) + (result.data?.distanceCharge || 0),
+        });
+      } else {
+        setError('Failed to get quote');
+      }
+    } catch (err) {
+      setError('Failed to get quote');
+    }
   };
 
-  const paymentMethods = [
-    { id: 'wallet', name: 'Wallet Balance', balance: '₹5,000', icon: Wallet },
-    { id: 'card', name: 'Credit/Debit Card', icon: CreditCard },
-    { id: 'upi', name: 'UPI Payment', icon: CreditCard }
-  ];
+  const handleCreateOrder = async () => {
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
+
+    setIsCreatingOrder(true);
+    setError('');
+
+    try {
+      const route = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('bookingRoute') || 'null') : null
+      const wm = typeof window !== 'undefined' ? Number(window.localStorage.getItem('waiting_minutes') || '0') : 0
+      const origin = route?.pickup
+      const rawDrop = route?.drop
+      const drops = Array.isArray(rawDrop) ? rawDrop : (rawDrop ? [rawDrop] : [])
+      const firstDrop = drops[0]
+      const orderData = {
+        vehicleType: vehicleId,
+        from: origin ? { address: origin.address || 'Pickup', location: { coordinates: [origin.lng, origin.lat] } } : undefined,
+        to: firstDrop ? { address: firstDrop.address || 'Drop', location: { coordinates: [firstDrop.lng, firstDrop.lat] } } : undefined,
+        distanceKm: route?.distanceKm || quoteData?.distanceKm || 0,
+        waitingMinutes: Number.isFinite(wm) ? wm : 0,
+        price: quoteData?.total || 0,
+        pricingBreakdown: quoteData || undefined,
+      };
+
+      const result = await OrderService.createOrder(orderData);
+      
+      if (result.success) {
+        // Redirect to confirmation page with order ID
+        router.push(`/booking/confirmation?orderId=${result.data._id}`);
+      } else {
+        setError(result.error || 'Failed to create order');
+      }
+    } catch (err) {
+      setError('Failed to create order');
+    } finally {
+      setIsCreatingOrder(false);
+    }
+  };
+
+  // Use quote data if available, otherwise fallback to static data
+  const bookingDetails = {
+    tripId: `QUOTE-${Date.now()}`,
+    vehicle: vehicleId === 'two-wheeler' ? 'Two Wheeler' : 
+             vehicleId === 'three-wheeler' ? 'Three Wheeler' : 'Heavy Truck',
+    distance: quoteData ? `${quoteData.distanceKm} kms` : '—',
+    pickupTime: `${WAITING_RULES[vehicleId]?.included || 0} mins loading/unloading time included`,
+    fareBreakdown: {
+      tripFare: quoteData?.total || 0,
+      distanceCharge: quoteData?.distanceCharge || 0,
+      waitingCharge: quoteData?.waiting?.extraWaitingCharge || 0,
+      netFare: quoteData?.total || 0,
+    },
+    estimatedTime: quoteData?.distanceKm ? `${Math.ceil((quoteData.distanceKm/25)*60)} mins (est.)` : '—',
+  };
+
+  // No pre-payment in app: payment handled directly with the driver.
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -86,7 +182,7 @@ export default function BookingReviewPage() {
                     </div>
                     <div>
                       <div className="text-xs text-slate-500 mb-1">Address Details</div>
-                      <span className="text-sm font-medium text-slate-800">{bookingDetails.driver}</span>
+                      <span className="text-sm font-medium text-slate-800">{routeData?.pickup?.address || 'Pickup & drop set on previous step'}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 hover:bg-green-100 transition-colors">
@@ -131,57 +227,38 @@ export default function BookingReviewPage() {
                         <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full font-medium">Confirmed</span>
                       </div>
                       <div className="space-y-1 text-sm text-green-700">
-                        <p className="font-medium">Ramesh • 9876548637</p>
-                        <p>Akshaya • 9876548627</p>
-                        <p className="text-xs text-green-600 bg-white/70 px-2 py-1 rounded">Ward 11, Jal vihar Road, Sector 48, Noida West</p>
+                        <p className="text-xs text-green-600 bg-white/70 px-2 py-1 rounded">{routeData?.pickup?.address || '—'}</p>
+                        {routeData?.pickup?.lat && routeData?.pickup?.lng && (
+                          <p className="text-xs text-green-700">Lat: {routeData.pickup.lat.toFixed(5)} • Lng: {routeData.pickup.lng.toFixed(5)}</p>
+                        )}
+                        <Button variant="ghost" className="p-0 h-auto text-blue-600 hover:text-blue-700 font-medium" onClick={() => router.push('/booking/address')}>Edit on Map →</Button>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Drop Location */}
-                  <div className="flex items-start gap-4 p-4 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 transition-colors">
-                    <div className="w-4 h-4 bg-red-500 rounded-full shadow-lg"></div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-red-900">Drop Location</h4>
-                        <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full font-medium animate-pulse">Pending</span>
+                  {/* Drop Locations (supports multiple) */}
+                  {(Array.isArray(routeData?.drop) ? routeData.drop : (routeData?.drop ? [routeData.drop] : [])).map((d, idx) => (
+                    <div key={idx} className="flex items-start gap-4 p-4 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 transition-colors">
+                      <div className="w-4 h-4 bg-red-500 rounded-full shadow-lg"></div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-red-900">Drop Location {routeData?.drop && Array.isArray(routeData.drop) ? `#${idx+1}` : ''}</h4>
+                          <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded-full font-medium">Set</span>
+                        </div>
+                        <div className="space-y-1 text-sm text-red-700">
+                          <p className="text-xs text-red-700 bg-white/70 px-2 py-1 rounded">{d?.address || '—'}</p>
+                          {d?.lat && d?.lng && (
+                            <p className="text-xs">Lat: {d.lat.toFixed(5)} • Lng: {d.lng.toFixed(5)}</p>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-sm text-red-700 mb-2">Searching for a driver...</p>
-                      <Button variant="ghost" className="p-0 h-auto text-blue-600 hover:text-blue-700 font-medium">
-                        View Details →
-                      </Button>
                     </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Offers Card */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 hover:shadow-2xl transition-all duration-300">
-              <div className="p-8">
-                <h3 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">%</span>
-                  </div>
-                  Offers and Discounts
-                </h3>
-                
-                <div className="flex items-center justify-between p-6 rounded-xl bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-gradient-to-br from-orange-500 to-red-500 p-3 rounded-xl shadow-lg">
-                      <span className="text-white font-bold text-lg">%</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-orange-900">Apply Coupon</p>
-                      <p className="text-sm text-orange-700">Save up to ₹50 on your booking</p>
-                    </div>
-                  </div>
-                  <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-                    Apply
-                  </Button>
-                </div>
-              </div>
-            </div>
+            
 
             {/* Goods Type Card */}
             <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50">
@@ -208,7 +285,7 @@ export default function BookingReviewPage() {
             </div>
           </div>
 
-          {/* Right Column - Fare Summary and Payment */}
+          {/* Right Column - Fare Summary */}
           <div className="lg:col-span-1">
             <div className="sticky top-6 space-y-8">
               {/* Fare Summary */}
@@ -223,85 +300,61 @@ export default function BookingReviewPage() {
                 </div>
                 <div className="p-6 space-y-4">
                   <div className="flex justify-between items-center py-2">
-                    <span className="text-slate-600">Trip Fare (incl. Toll)</span>
-                    <span className="font-semibold text-slate-900">₹{bookingDetails.fareBreakdown.tripFare}</span>
+                    <span className="text-slate-600">Base Fare</span>
+                    <span className="font-semibold text-slate-900">{formatCurrencyINR(quoteData?.base || 0)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2">
-                    <span className="text-slate-600">Net Fare</span>
-                    <span className="font-semibold text-slate-900">₹{bookingDetails.fareBreakdown.tollCharge}</span>
+                    <span className="text-slate-600">Distance Charge ({quoteData?.distanceKm || 0} km)</span>
+                    <span className="font-semibold text-slate-900">{formatCurrencyINR(quoteData?.distanceCharge || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-600">Waiting ({quoteData?.waiting?.providedMinutes || 0}m, includes {quoteData?.waiting?.included || 0}m)</span>
+                    <span className="font-semibold text-slate-900">{formatCurrencyINR(quoteData?.waiting?.extraWaitingCharge || 0)}</span>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
                     <div className="flex justify-between items-center p-4 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50">
                       <span className="font-semibold text-blue-900">Amount Payable</span>
-                      <span className="text-2xl font-bold text-blue-700">₹{bookingDetails.fareBreakdown.netFare}</span>
+                      <span className="text-2xl font-bold text-blue-700">{formatCurrencyINR(bookingDetails.fareBreakdown.netFare)}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Payment Method */}
+              {/* Payment Info Notice */}
               <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50">
                 <div className="p-6">
-                  <h3 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-2">
-                    <CreditCard className="h-5 w-5 text-blue-600" />
-                    Payment Method
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {paymentMethods.map((method) => {
-                      const IconComponent = method.icon;
-                      const isSelected = selectedPaymentMethod === method.id;
-                      return (
-                        <div
-                          key={method.id}
-                          className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-300 ${
-                            isSelected 
-                              ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300 shadow-lg transform scale-[1.02]' 
-                              : 'bg-slate-50 border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-100'
-                          }`}
-                          onClick={() => setSelectedPaymentMethod(method.id)}
-                        >
-                          <div className={`p-3 rounded-lg ${
-                            isSelected ? 'bg-blue-500' : 'bg-slate-200'
-                          }`}>
-                            <IconComponent className={`h-5 w-5 ${
-                              isSelected ? 'text-white' : 'text-slate-600'
-                            }`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className={`font-semibold ${
-                              isSelected ? 'text-blue-900' : 'text-slate-800'
-                            }`}>{method.name}</p>
-                            {method.balance && (
-                              <p className={`text-sm ${
-                                isSelected ? 'text-blue-700' : 'text-slate-500'
-                              }`}>Available: {method.balance}</p>
-                            )}
-                          </div>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            isSelected 
-                              ? 'border-blue-500 bg-blue-500' 
-                              : 'border-slate-300'
-                          }`}>
-                            {isSelected && (
-                              <div className="w-2 h-2 bg-white rounded-full"></div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Payment Information</h3>
+                  <p className="text-sm text-slate-700">
+                    Payment is handled directly with the driver partner. This app does not accept pre-payments.
+                    You will see the fare estimate here and can pay the driver upon delivery completion.
+                  </p>
                 </div>
               </div>
 
               {/* Action Buttons */}
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <Button 
-                  onClick={() => router.push('/booking/confirmation')}
-                  className="w-full h-14 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
+                  onClick={handleCreateOrder}
+                  disabled={isCreatingOrder || !quoteData}
+                  className="w-full h-14 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Truck className="mr-2 h-5 w-5" />
-                  Book {bookingDetails.vehicle}
+                  {isCreatingOrder ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Creating Order...
+                    </>
+                  ) : (
+                    <>
+                      <Truck className="mr-2 h-5 w-5" />
+                      Book {bookingDetails.vehicle}
+                    </>
+                  )}
                 </Button>
                 <Button 
                   variant="outline" 
@@ -317,7 +370,7 @@ export default function BookingReviewPage() {
                 <div className="flex items-center justify-center gap-6 text-xs text-slate-600">
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>Secure Payment</span>
+                    <span>Pay Driver Directly</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>

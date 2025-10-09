@@ -1,48 +1,52 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, MapPin, Phone, MessageCircle, Star, Navigation } from 'lucide-react'
+import { ArrowLeft, MapPin, Phone, Star, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { api } from '@/lib/api'
 
 export default function BookingConfirmationPage() {
   const router = useRouter()
-  const [bookingStage, setBookingStage] = useState('searching') // searching, found, confirmed
+  const params = useSearchParams()
+  const orderId = params.get('orderId')
   const [searchDuration, setSearchDuration] = useState(0)
-
-  const driverInfo = {
-    name: 'Ramesh',
-    phone: '9573248557',
-    vehicleNumber: 'JASRA • 6456551326',
-    location: 'Rama, Kamal, Patel',
-    address: 'Shop • High Court Road, Ashika Drive, Noida',
-    vehicle: 'Tata Ace'
-  }
+  const [tracking, setTracking] = useState(null) // { status, driverBasic, driverLocation }
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    // Simulate searching for driver
-    const searchTimer = setInterval(() => {
-      setSearchDuration(prev => prev + 1)
-    }, 1000)
-
-    // After 5 seconds, show driver found
-    const foundTimer = setTimeout(() => {
-      setBookingStage('found')
-    }, 5000)
-
-    return () => {
-      clearInterval(searchTimer)
-      clearTimeout(foundTimer)
+    let intervalId
+    let tickId
+    async function fetchTracking() {
+      if (!orderId) { setLoading(false); return }
+      try {
+        setError('')
+        const data = await api.get(`/orders/${orderId}/tracking`)
+        setTracking(data)
+      } catch (e) {
+        setError('Failed to load tracking')
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [])
+    // initial load
+    fetchTracking()
+    // poll every 5s until driver assigned
+    intervalId = setInterval(fetchTracking, 5000)
+    // search timer for UI
+    tickId = setInterval(() => setSearchDuration((p)=>p+1), 1000)
+    return () => { clearInterval(intervalId); clearInterval(tickId) }
+  }, [orderId])
 
   const handleViewDetails = () => {
     router.push('/orders')
   }
 
-  if (bookingStage === 'searching') {
+  const searching = !tracking || !tracking?.driverBasic
+  if (loading || searching) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -83,9 +87,11 @@ export default function BookingConfirmationPage() {
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-500">
-                  We're connecting you with nearby partners for the fastest pickup
-                </p>
+                {error ? (
+                  <p className="text-sm text-red-600">{error}</p>
+                ) : (
+                  <p className="text-sm text-gray-500">We're connecting you with nearby partners for the fastest pickup</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -118,8 +124,8 @@ export default function BookingConfirmationPage() {
                 <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Star className="w-8 h-8 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-green-800 mb-2">Booking Done</h2>
-                <p className="text-green-700">Searching for a driver...</p>
+                <h2 className="text-2xl font-bold text-green-800 mb-2">Driver Assigned</h2>
+                <p className="text-green-700">You can contact the driver directly for coordination.</p>
                 <p className="text-sm text-green-600 mt-2">Booking will get cancelled if no driver accepts in 10 mins</p>
               </CardContent>
             </Card>
@@ -132,18 +138,16 @@ export default function BookingConfirmationPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
                   <div>
-                    <h3 className="font-bold text-lg">{driverInfo.name} • {driverInfo.phone}</h3>
-                    <p className="text-sm text-gray-600">{driverInfo.location}</p>
-                    <p className="text-sm text-gray-500 mt-1">{driverInfo.vehicleNumber}</p>
+                    <h3 className="font-bold text-lg">{tracking?.driverBasic?.name || 'Driver'} • {tracking?.driverBasic?.phone || '—'}</h3>
+                    <p className="text-sm text-gray-600">{tracking?.driverBasic?.vehicleType || ''}</p>
+                    <p className="text-sm text-gray-500 mt-1">{tracking?.driverBasic?.vehicleNumber || ''}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={`tel:${tracking?.driverBasic?.phone || ''}`}>
                       <Phone className="h-4 w-4 mr-1" />
                       Call
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <MessageCircle className="h-4 w-4 mr-1" />
-                      Chat
+                      </a>
                     </Button>
                   </div>
                 </div>
@@ -153,7 +157,7 @@ export default function BookingConfirmationPage() {
                     <div className="w-3 h-3 bg-green-500 rounded-full mt-1.5"></div>
                     <div>
                       <p className="font-medium text-gray-900">Pickup Location</p>
-                      <p className="text-sm text-gray-600">Rohit Niwas, Sola</p>
+                      <p className="text-sm text-gray-600">—</p>
                     </div>
                   </div>
                   <div className="ml-6 border-l-2 border-gray-200 h-6"></div>
@@ -161,7 +165,7 @@ export default function BookingConfirmationPage() {
                     <div className="w-3 h-3 bg-red-500 rounded-full mt-1.5"></div>
                     <div>
                       <p className="font-medium text-gray-900">Drop Location</p>
-                      <p className="text-sm text-gray-600">{driverInfo.address}</p>
+                      <p className="text-sm text-gray-600">—</p>
                     </div>
                   </div>
                 </div>

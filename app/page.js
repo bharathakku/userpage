@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { MapPin, Clock, Star, Wallet, Plus, ArrowRight, Target, Package, Truck } from 'lucide-react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
 
 const vehicleTypes = [
   {
@@ -19,12 +21,12 @@ const vehicleTypes = [
     hoverGradient: 'group-hover:from-blue-600 group-hover:to-blue-700'
   },
   {
-    id: 'pickup',
-    name: 'Pickup Truck',
-    subtitle: 'Reliable & Versatile',
-    image: '/images/pickup-truck-flaticon.png',
-    description: 'Perfect for medium to large deliveries',
-    capacity: 'Up to 1000 kg',
+    id: 'twowheeler',
+    name: 'Two Wheeler',
+    subtitle: 'Fast & Light Deliveries',
+    image: 'https://img.icons8.com/color/96/scooter.png',
+    description: 'Ideal for documents and small parcels',
+    capacity: 'Up to 50 kg',
     gradient: 'from-green-500 to-green-600',
     hoverGradient: 'group-hover:from-green-600 group-hover:to-green-700'
   },
@@ -43,6 +45,44 @@ const vehicleTypes = [
 export default function Home() {
   const [selectedLocation, setSelectedLocation] = useState('Pick Up From')
   const [selectedVehicle, setSelectedVehicle] = useState(null)
+  const { user, loading, isAuthenticated } = useAuth()
+  const router = useRouter()
+
+  // No client redirect here; middleware handles protection. This page shows a public CTA if not authenticated.
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Public landing fallback when not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="container mx-auto px-3 sm:px-4 py-12">
+          <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 rounded-2xl sm:rounded-3xl p-6 sm:p-10 shadow-2xl text-center">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-4">Welcome to YourDelivery</h1>
+            <p className="text-blue-100 text-base sm:text-lg max-w-2xl mx-auto mb-8">Fast, reliable city logistics. Sign in to book deliveries, track orders, and manage your account.</p>
+            <div className="flex items-center justify-center gap-3">
+              <Link href="/auth/login">
+                <Button className="bg-yellow-400 hover:bg-yellow-500 text-blue-900 font-semibold px-6 sm:px-8 py-3 rounded-full text-base sm:text-lg transition-all duration-300 shadow-lg">Sign in</Button>
+              </Link>
+              <Link href="/auth/signup">
+                <Button variant="outline" className="bg-white/10 border-white/30 text-white hover:bg-white/20 px-6 py-3 rounded-full">Create account</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">

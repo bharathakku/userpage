@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Star, User, CheckCircle, MessageCircle, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { API_BASE_URL } from '@/lib/api/apiClient'
 
 export default function RatingPage() {
   const router = useRouter()
@@ -15,17 +16,38 @@ export default function RatingPage() {
   const [feedback, setFeedback] = useState('')
   const [selectedTags, setSelectedTags] = useState([])
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [orderDetails, setOrderDetails] = useState(null)
 
-  // Mock order data - in real app, this would be fetched based on orderId
-  const orderDetails = {
-    id: orderId,
-    driver: 'Rajesh Kumar',
-    vehicle: 'Tata Ace',
-    date: '2024-01-20',
-    pickup: 'Sector 62, Noida',
-    dropoff: 'Karol Bagh, Delhi',
-    fare: 380
-  }
+  // Load real order details (driver, fare, etc.)
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+        const res = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        })
+        if (!res.ok) throw new Error('Failed to load order')
+        const data = await res.json()
+        if (!mounted) return
+        const driverName = data?.driverId && data?.customer ? (data.customer?.name || 'Driver') : 'Driver'
+        setOrderDetails({
+          id: data?._id || orderId,
+          driver: driverName,
+          vehicle: data?.vehicleType || '—',
+          fare: (data?.adjustedPrice ?? data?.price) || 0,
+        })
+      } catch (e) {
+        if (mounted) setError(e?.message || 'Unable to load order details')
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [orderId])
+
+  const od = orderDetails || { id: orderId, driver: 'Driver', vehicle: '—', fare: 0 }
 
   const feedbackTags = [
     'On time delivery',
@@ -54,23 +76,31 @@ export default function RatingPage() {
     )
   }
 
-  const handleSubmit = () => {
-    if (rating === 0) return
-    
-    // Here you would submit the rating to your API
-    console.log({
-      orderId,
-      rating,
-      feedback,
-      tags: selectedTags
-    })
-    
-    setSubmitted(true)
-    
-    // Redirect back to orders after 2 seconds
-    setTimeout(() => {
-      router.push('/orders')
-    }, 2000)
+  const handleSubmit = async () => {
+    if (rating === 0 || submitting) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      const res = await fetch(`${API_BASE_URL}/orders/${orderId}/rate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ rating, review: feedback }),
+      })
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        throw new Error(t || 'Failed to submit rating')
+      }
+      setSubmitted(true)
+      setTimeout(() => router.push('/orders'), 1500)
+    } catch (e) {
+      setError(e?.message || 'Failed to submit rating')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const getRatingText = (rating) => {
@@ -141,19 +171,19 @@ export default function RatingPage() {
                   <User className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900">{orderDetails.driver}</p>
-                  <p className="text-sm text-gray-600">{orderDetails.vehicle}</p>
+                  <p className="font-medium text-gray-900">{od.driver}</p>
+                  <p className="text-sm text-gray-600">{od.vehicle}</p>
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-gray-500">Order ID</p>
-                  <p className="font-medium">#{orderDetails.id}</p>
+                  <p className="font-medium">#{od.id}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Amount</p>
-                  <p className="font-medium">₹{orderDetails.fare}</p>
+                  <p className="font-medium">₹{od.fare}</p>
                 </div>
               </div>
             </CardContent>
@@ -232,10 +262,10 @@ export default function RatingPage() {
               <div className="space-y-3">
                 <Button
                   onClick={handleSubmit}
-                  disabled={rating === 0}
+                  disabled={rating === 0 || submitting}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white"
                 >
-                  Submit Rating
+                  {submitting ? 'Submitting...' : 'Submit Rating'}
                 </Button>
                 <Button
                   variant="outline"
@@ -244,6 +274,9 @@ export default function RatingPage() {
                 >
                   Skip for Now
                 </Button>
+                {error && (
+                  <p className="text-sm text-red-600 text-center">{error}</p>
+                )}
               </div>
             </CardContent>
           </Card>

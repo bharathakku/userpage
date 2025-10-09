@@ -15,89 +15,141 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { API_BASE_URL } from '@/lib/api/apiClient'
+import { connectSocket, joinOrder, leaveOrder, onOrderStatus, onDriverLocation } from '@/lib/socket'
+import OrderMap from '@/components/OrderMap'
 
 export default function OrderTrackingPage() {
   const router = useRouter()
   const params = useParams()
   const orderId = params.orderId
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [status, setStatus] = useState('in_transit')
+  const [driver, setDriver] = useState({ name: 'Driver', phone: '', vehicle: '', plateNumber: '', rating: 0 })
+  const [pickup, setPickup] = useState({ address: '' })
+  const [dropoff, setDropoff] = useState({ address: '', estimatedTime: '' })
+  const [fare, setFare] = useState(0)
+  const [distance, setDistance] = useState('')
+  const [estimatedArrival, setEstimatedArrival] = useState('')
+  const [progressPct, setProgressPct] = useState(0)
+  const [timeline, setTimeline] = useState([])
+  const [driverLocation, setDriverLocation] = useState(null)
 
-  // Mock order data - in real app, this would be fetched based on orderId
-  const orderDetails = {
-    id: orderId,
-    status: 'in_transit',
-    driver: {
-      name: 'Rajesh Kumar',
-      phone: '+91 98765 43210',
-      vehicle: 'Tata Ace',
-      plateNumber: 'DL 3C AB 1234',
-      rating: 4.8
-    },
-    pickup: {
-      address: 'Sector 48, Noida West',
-      time: '2:30 PM',
-      completed: true
-    },
-    dropoff: {
-      address: 'Connaught Place, Delhi',
-      estimatedTime: '45 mins',
-      completed: false
-    },
-    fare: 495,
-    distance: '32 km',
-    estimatedArrival: '3:15 PM'
+  // Compute progress from status timeline
+  function calcProgress(statusVal) {
+    const order = ['assigned','accepted','picked_up','in_transit','delivered']
+    const idx = Math.max(0, order.indexOf(statusVal))
+    return Math.round((idx / (order.length - 1)) * 100)
   }
 
-  const trackingSteps = [
-    {
-      id: 1,
-      title: 'Order Confirmed',
-      description: 'Your order has been placed successfully',
-      time: '2:00 PM',
-      completed: true,
-      active: false
-    },
-    {
-      id: 2,
-      title: 'Driver Assigned',
-      description: 'Driver is on the way to pickup location',
-      time: '2:15 PM',
-      completed: true,
-      active: false
-    },
-    {
-      id: 3,
-      title: 'Picked Up',
-      description: 'Item has been collected from pickup location',
-      time: '2:30 PM',
-      completed: true,
-      active: false
-    },
-    {
-      id: 4,
-      title: 'In Transit',
-      description: 'Your item is on the way to destination',
-      time: 'Now',
-      completed: false,
-      active: true
-    },
-    {
-      id: 5,
-      title: 'Delivered',
-      description: 'Item will be delivered to destination',
-      time: 'Est. 3:15 PM',
-      completed: false,
-      active: false
+  const trackingSteps = (() => {
+    const orderSeq = ['assigned','accepted','picked_up','in_transit','delivered']
+    const titles = {
+      assigned: { title: 'Driver Assigned', desc: 'Driver assigned to your order' },
+      accepted: { title: 'Driver Accepted', desc: 'Driver accepted and is heading to pickup' },
+      picked_up: { title: 'Picked Up', desc: 'Package collected from pickup location' },
+      in_transit: { title: 'In Transit', desc: 'On the way to your location' },
+      delivered: { title: 'Delivered', desc: 'Package handed over' },
     }
-  ]
+    const idx = Math.max(0, orderSeq.indexOf(status))
+    return orderSeq.map((s, i) => ({
+      id: i + 1,
+      title: titles[s].title,
+      description: titles[s].desc,
+      time: i < idx ? '✓' : i === idx ? 'Now' : '',
+      completed: i < idx || s === 'delivered' && status === 'delivered',
+      active: i === idx && status !== 'delivered',
+    }))
+  })()
 
+  // Fetch initial tracking and setup socket listeners
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 30000) // Update every 30 seconds
+    let offStatus = null
+    let offLoc = null
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000)
 
-    return () => clearInterval(timer)
-  }, [])
+    async function bootstrap() {
+      try {
+        // Connect socket
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+        connectSocket(token)
+        joinOrder(orderId)
+
+        // Fetch initial tracking
+        const res = await fetch(`${API_BASE_URL}/orders/${orderId}/tracking`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setStatus(data.status || 'in_transit')
+          setTimeline(Array.isArray(data.timeline) ? data.timeline : [])
+          setDriverLocation(data.driverLocation || null)
+          setProgressPct(calcProgress(data.status || 'in_transit'))
+          if (data.driverBasic) {
+            setDriver({
+              name: data.driverBasic.name || 'Driver',
+              phone: data.driverBasic.phone || '',
+              vehicle: data.driverBasic.vehicleType || '',
+              plateNumber: data.driverBasic.vehicleNumber || '',
+              rating: 5, // placeholder; hook to rating API if available
+            })
+          }
+          // Fetch full order for addresses/fare/distance
+          try {
+            const res2 = await fetch(`${API_BASE_URL}/orders/${orderId}`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } })
+            if (res2.ok) {
+              const ord = await res2.json()
+              setPickup({ address: ord?.from?.address || '' })
+              setDropoff({ address: ord?.to?.address || '', estimatedTime: '' })
+              setFare((ord?.adjustedPrice ?? ord?.price) || 0)
+              setDistance(`${Number(ord?.distanceKm ?? 0).toFixed(2)} km`)
+            }
+          } catch {}
+        }
+      } catch (e) {
+        console.error('Failed to init tracking', e)
+      }
+
+      // Ask for notification permission (best-effort)
+      try {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission().catch(() => {})
+        }
+      } catch {}
+
+      // Subscribe to live updates
+      offStatus = onOrderStatus((evt) => {
+        if (evt?.orderId === orderId) {
+          setStatus(evt.status)
+          setProgressPct(calcProgress(evt.status))
+          setTimeline((tl) => [...tl, { status: evt.status, at: new Date().toISOString(), completed: true }])
+          // Notify on delivered and update UI elements
+          if (evt.status === 'delivered') {
+            try {
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                const n = new Notification('Order Delivered', { body: `Your order #${orderId} has been delivered.` })
+                setTimeout(() => n.close && n.close(), 4000)
+              }
+            } catch {}
+            setEstimatedArrival('Delivered')
+          }
+        }
+      })
+      offLoc = onDriverLocation((evt) => {
+        if (evt?.orderId === orderId) {
+          setDriverLocation({ lat: evt.lat, lng: evt.lng, ts: evt.ts })
+        }
+      })
+    }
+
+    bootstrap()
+    return () => {
+      clearInterval(timer)
+      leaveOrder(orderId)
+      if (offStatus) offStatus()
+      if (offLoc) offLoc()
+    }
+  }, [orderId])
 
   const handleBack = () => {
     router.back()
@@ -105,7 +157,7 @@ export default function OrderTrackingPage() {
 
   const handleCallDriver = () => {
     // In real app, this would initiate a call
-    window.open(`tel:${orderDetails.driver.phone}`)
+    if (driver?.phone) window.open(`tel:${driver.phone}`)
   }
 
   const handleRefreshTracking = () => {
@@ -144,30 +196,56 @@ export default function OrderTrackingPage() {
         </div>
 
         <div className="space-y-6">
-          {/* Live Status Card */}
-          <Card className="border-blue-200 bg-blue-50">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                  <Truck className="h-6 w-6 text-white" />
+          {/* Delivered Success Banner */}
+          {status === 'delivered' && (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="p-5 flex items-start gap-3">
+                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-blue-900">Your order is on the way!</h3>
-                  <p className="text-sm text-blue-700">Estimated arrival: {orderDetails.estimatedArrival}</p>
+                  <h3 className="font-semibold text-green-900">Delivery Completed</h3>
+                  <p className="text-sm text-green-700">Thank you! Your order has been delivered successfully.</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {/* Live Status Card */}
+          <Card className={status === 'delivered' ? 'border-green-200 bg-green-50' : 'border-blue-200 bg-blue-50'}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-12 h-12 ${status === 'delivered' ? 'bg-green-600' : 'bg-blue-600'} rounded-full flex items-center justify-center`}>
+                  {status === 'delivered' ? (
+                    <CheckCircle className="h-6 w-6 text-white" />
+                  ) : (
+                    <Truck className="h-6 w-6 text-white" />
+                  )}
+                </div>
+                <div>
+                  <h3 className={`font-semibold ${status === 'delivered' ? 'text-green-900' : 'text-blue-900'}`}>
+                    {status === 'delivered' ? 'Your order is delivered' : `Your order is ${status.replace('_',' ')}`}
+                  </h3>
+                  <p className={`text-sm ${status === 'delivered' ? 'text-green-700' : 'text-blue-700'}`}>
+                    {status === 'delivered' ? 'Completed' : `Estimated arrival: ${estimatedArrival || '—'}`}
+                  </p>
                 </div>
               </div>
               
               <div className="bg-white p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Progress</span>
-                  <span className="text-sm font-medium text-blue-600">60%</span>
+                  <span className="text-sm font-medium text-blue-600">{progressPct}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: '60%' }}></div>
+                  <div className="bg-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }}></div>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Driver Information */}
+          {/* Live Map */}
+          <OrderMap driverLocation={driverLocation} />
 
           {/* Driver Information */}
           <Card>
@@ -184,15 +262,15 @@ export default function OrderTrackingPage() {
                     <User className="h-6 w-6 text-gray-600" />
                   </div>
                   <div>
-                    <h4 className="font-medium text-gray-900">{orderDetails.driver.name}</h4>
-                    <p className="text-sm text-gray-600">{orderDetails.driver.vehicle} • {orderDetails.driver.plateNumber}</p>
+                    <h4 className="font-medium text-gray-900">{driver?.name || 'Driver Assigned'}</h4>
+                    <p className="text-sm text-gray-600">{driver?.vehicle} {driver?.plateNumber ? `• ${driver.plateNumber}` : ''}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <div className="flex">
                         {[...Array(5)].map((_, i) => (
                           <div
                             key={i}
                             className={`w-3 h-3 ${
-                              i < Math.floor(orderDetails.driver.rating)
+                              i < Math.floor(driver?.rating || 0)
                                 ? 'text-yellow-400'
                                 : 'text-gray-300'
                             }`}
@@ -201,7 +279,7 @@ export default function OrderTrackingPage() {
                           </div>
                         ))}
                       </div>
-                      <span className="text-xs text-gray-500">({orderDetails.driver.rating})</span>
+                      <span className="text-xs text-gray-500">({driver?.rating || 0})</span>
                     </div>
                   </div>
                 </div>
@@ -236,8 +314,8 @@ export default function OrderTrackingPage() {
                       <p className="font-medium text-gray-900">Pickup Location</p>
                       <CheckCircle className="h-4 w-4 text-green-500" />
                     </div>
-                    <p className="text-sm text-gray-600">{orderDetails.pickup.address}</p>
-                    <p className="text-xs text-green-600 mt-1">Completed at {orderDetails.pickup.time}</p>
+                    <p className="text-sm text-gray-600">{pickup.address}</p>
+                    <p className="text-xs text-green-600 mt-1">&nbsp;</p>
                   </div>
                 </div>
 
@@ -249,15 +327,15 @@ export default function OrderTrackingPage() {
                   <div className="w-4 h-4 bg-red-500 rounded-full mt-1 flex-shrink-0"></div>
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">Dropoff Location</p>
-                    <p className="text-sm text-gray-600">{orderDetails.dropoff.address}</p>
-                    <p className="text-xs text-blue-600 mt-1">ETA: {orderDetails.dropoff.estimatedTime}</p>
+                    <p className="text-sm text-gray-600">{dropoff.address}</p>
+                    <p className="text-xs text-blue-600 mt-1">ETA: {dropoff.estimatedTime || '—'}</p>
                   </div>
                 </div>
               </div>
 
               <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm">
                 <span className="text-gray-600">Total Distance</span>
-                <span className="font-medium">{orderDetails.distance}</span>
+                <span className="font-medium">{distance || '—'}</span>
               </div>
             </CardContent>
           </Card>
@@ -322,15 +400,15 @@ export default function OrderTrackingPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Order ID</span>
-                  <span className="font-medium">#{orderDetails.id}</span>
+                  <span className="font-medium">#{orderId}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Vehicle Type</span>
-                  <span className="font-medium">{orderDetails.driver.vehicle}</span>
+                  <span className="font-medium">{driver?.vehicle || '—'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Total Amount</span>
-                  <span className="font-bold text-lg text-green-600">₹{orderDetails.fare}</span>
+                  <span className="font-bold text-lg text-green-600">₹{fare || 0}</span>
                 </div>
               </div>
             </CardContent>

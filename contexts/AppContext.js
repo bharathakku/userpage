@@ -6,12 +6,12 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react'
 const initialState = {
   user: {
     id: null,
-    name: 'Ramesh',
-    phone: '+91 9876543210',
-    email: 'ramesh@example.com',
-    profileType: 'Partner Enterprise',
-    isAuthenticated: true,
-    referralCode: 'RBI-S43'
+    name: '',
+    phone: '',
+    email: '',
+    profileType: '',
+    isAuthenticated: false,
+    referralCode: ''
   },
   wallet: {
     balance: 5000,
@@ -198,15 +198,39 @@ const AppContext = createContext()
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(appReducer, initialState)
 
-  // API simulation functions (replace with real API calls)
+  // Helper to normalize API base
+  const getApiBase = () => {
+    const raw = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4001/api'
+    return raw.endsWith('/api') ? raw : raw.replace(/\/$/, '') + '/api'
+  }
+
+  // API functions
   const api = {
     // User APIs
     async getUserProfile() {
       dispatch({ type: actionTypes.SET_LOADING, payload: true })
       try {
-        // Simulated API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        // dispatch({ type: actionTypes.SET_USER, payload: userData })
+        const apiBase = getApiBase()
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+        if (!token) {
+          dispatch({ type: actionTypes.SET_LOADING, payload: false })
+          return
+        }
+        const res = await fetch(`${apiBase}/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+        })
+        if (!res.ok) throw new Error(`Failed to load profile (${res.status})`)
+        const user = await res.json()
+        dispatch({ type: actionTypes.SET_USER, payload: {
+          id: user._id,
+          name: user.name || '',
+          phone: user.phone || '',
+          email: user.email || '',
+          profileType: 'Customer',
+          isAuthenticated: true,
+          referralCode: user.referralCode || ''
+        } })
         dispatch({ type: actionTypes.SET_LOADING, payload: false })
       } catch (error) {
         dispatch({ type: actionTypes.SET_ERROR, payload: error.message })
@@ -300,6 +324,14 @@ export function AppProvider({ children }) {
       }
     }
   }
+
+  // Bootstrap: load profile if token exists
+  useEffect(() => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (token) api.getUserProfile()
+    } catch {}
+  }, [])
 
   // Auto-clear notifications after 5 seconds
   useEffect(() => {

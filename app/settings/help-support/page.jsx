@@ -20,52 +20,135 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { connectSocket, joinChatThread, onChatMessage, emitChatMessage } from '@/lib/socket'
+import { useApp } from '@/contexts/AppContext'
 
 // Chat Component
 function ChatWidget() {
+  const { state } = useApp()
+  // Resolve userId robustly from context or localStorage
+  const userId = (() => {
+    if (state?.user?.id) return state.user.id
+    if (state?.user?._id) return state.user._id
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('user_data') : null
+      const parsed = raw ? JSON.parse(raw) : null
+      return parsed?.id || parsed?._id || null
+    } catch { return null }
+  })()
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: 'Hello! How can I help you today?',
-      sender: 'agent',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
+  const [messages, setMessages] = useState([])
+  const [threadId, setThreadId] = useState(null)
+  const [unread, setUnread] = useState(0)
   const messagesEndRef = useRef(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4001/api'
+  const apiBase = rawBase.endsWith('/api') ? rawBase : rawBase.replace(/\/$/, '') + '/api'
 
+  // connect socket once and auto-open if coming from complaint form
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  const sendMessage = () => {
-    if (message.trim()) {
-      const newMessage = {
-        id: messages.length + 1,
-        text: message,
-        sender: 'user',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    connectSocket()
+    try {
+      const flag = typeof window !== 'undefined' ? localStorage.getItem('open_support_chat') : null
+      if (flag === '1') {
+        setIsOpen(true)
+        localStorage.removeItem('open_support_chat')
       }
-      setMessages([...messages, newMessage])
-      setMessage('')
-      
-      // Simulate agent response
-      setTimeout(() => {
-        const response = {
-          id: messages.length + 2,
-          text: 'Thank you for your message. Our team will assist you shortly.',
-          sender: 'agent',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-        setMessages(prev => [...prev, response])
-      }, 1000)
+    } catch {}
+  }, [])
+
+  // Allow external trigger from the page to open the chat instantly
+  useEffect(() => {
+    const handler = () => { setIsOpen(true); setIsMinimized(false); setUnread(0) }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('open_support_chat', handler)
+      // Optional global for convenience
+      try { window.openSupportChat = handler } catch {}
     }
+    return () => { if (typeof window !== 'undefined') window.removeEventListener('open_support_chat', handler) }
+  }, [])
+
+  // Set threadId and join room when userId is known
+  useEffect(() => {
+    if (!userId) return
+    const tid = `admin:${userId}`
+    setThreadId(tid)
+    joinChatThread(tid)
+  }, [userId])
+  // Listen for incoming messages for this thread
+  useEffect(() => {
+    if (!threadId) return
+    const off = onChatMessage((msg) => {
+      if (msg.threadId && msg.threadId !== threadId) return
+      setMessages(prev => {
+        const id = msg._id || `${msg.text}-${msg.createdAt}`
+        const exists = prev.some(m => (m._id || m.id) === id)
+        if (exists) return prev
+        return [...prev, {
+          _id: msg._id,
+          id,
+          text: msg.text,
+          sender: String(msg.fromUserId) === String(userId) ? 'user' : 'agent',
+          time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]
+      })
+      if (!isOpen || isMinimized) setUnread(u => u + 1)
+      if (isOpen && !isMinimized) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 40)
+    })
+    return () => { off && off() }
+  }, [threadId, userId, isOpen, isMinimized])
+
+  // When opening the widget, load history once
+  useEffect(() => {
+    if (!isOpen || !threadId) return
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    const authHeader = token ? { Authorization: `Bearer ${token}` } : {}
+    fetch(`${apiBase}/chat/threads/${threadId}/messages`, { credentials: 'include', headers: { ...authHeader } })
+      .then(async r => {
+        if (!r.ok) return []
+        return r.json()
+      })
+      .then(items => {
+        const mapped = (items || []).map(m => ({
+          id: m._id,
+          text: m.text,
+          sender: String(m.fromUserId) === String(userId) ? 'user' : 'agent',
+          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }))
+        setMessages(mapped)
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
+      })
+      .catch(() => {})
+  }, [isOpen, threadId, userId, apiBase])
+
+  
+
+  const sendMessage = async () => {
+    if (!message.trim() || !threadId) return
+    const text = message
+    setMessage('')
+    const tempId = `local-${Date.now()}`
+    setMessages(prev => [...prev, { id: tempId, _id: tempId, text, sender: 'user', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 20)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      const authHeader = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`${apiBase}/chat/threads/${threadId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        credentials: 'include',
+        body: JSON.stringify({ text })
+      })
+      let saved = null
+      try { saved = await res.json() } catch {}
+      const payload = saved && saved._id ? saved : { _id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, fromUserId: userId, createdAt: new Date().toISOString(), threadId }
+      // Update optimistic bubble to use saved id so socket echo won't duplicate
+      setMessages(prev => prev.map(m => (m._id === tempId ? { ...m, _id: payload._id, id: payload._id, time: new Date(payload.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } : m)))
+      // Now emit once so the admin receives it
+      emitChatMessage(threadId, payload)
+    } catch {}
   }
 
   const handleKeyPress = (e) => {
@@ -79,10 +162,15 @@ function ChatWidget() {
     return (
       <div className="fixed bottom-4 right-4 z-50">
         <Button
-          onClick={() => setIsOpen(true)}
-          className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg flex items-center justify-center"
+          onClick={() => { setIsOpen(true); setUnread(0) }}
+          className="relative h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg flex items-center justify-center"
         >
           <MessageCircle className="h-6 w-6 text-white" />
+          {unread > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none px-1.5 py-1 rounded-full">
+              {unread}
+            </span>
+          )}
         </Button>
       </div>
     )
@@ -120,9 +208,9 @@ function ChatWidget() {
         {!isMinimized && (
           <>
             <CardContent className="h-64 overflow-y-auto p-4 space-y-3">
-              {messages.map((msg) => (
+              {messages.map((msg, idx) => (
                 <div
-                  key={msg.id}
+                  key={`${msg._id || msg.id || 'm'}-${idx}`}
                   className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
@@ -145,7 +233,7 @@ function ChatWidget() {
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onKeyDown={handleKeyPress}
                   placeholder="Type your message..."
                   className="flex-1 p-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   rows={1}
@@ -177,16 +265,6 @@ export default function HelpSupportPage() {
 
   const contactOptions = [
     {
-      icon: Phone,
-      title: 'Call Us',
-      subtitle: 'Get immediate assistance',
-      info: '+91 1800-123-4567',
-      available: '24/7 Available',
-      action: 'Call Now',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50'
-    },
-    {
       icon: MessageCircle,
       title: 'Live Chat',
       subtitle: 'Chat with our support team',
@@ -208,26 +286,6 @@ export default function HelpSupportPage() {
     }
   ]
 
-  const quickActions = [
-    {
-      icon: FileText,
-      title: 'Order Issues',
-      subtitle: 'Report problems with your delivery',
-      href: '/help/order-issues'
-    },
-    {
-      icon: AlertTriangle,
-      title: 'Report a Problem',
-      subtitle: 'Technical issues or concerns',
-      href: '/help/report-problem'
-    },
-    {
-      icon: HelpCircle,
-      title: 'FAQs',
-      subtitle: 'Frequently asked questions',
-      href: '/help/faqs'
-    }
-  ]
 
   const faqs = [
     {
@@ -303,43 +361,45 @@ export default function HelpSupportPage() {
                         <Clock className="h-3 w-3" />
                         {option.available}
                       </span>
-                      <Button size="sm" className={`${option.color.replace('text-', 'bg-').replace('-600', '-600')} hover:${option.color.replace('text-', 'bg-').replace('-600', '-700')} text-white`}>
-                        {option.action}
-                      </Button>
+                      {option.title === 'Live Chat' ? (
+                        <Button
+                          size="sm"
+                          onClick={() => { try { window.dispatchEvent(new Event('open_support_chat')) } catch {} }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          Start Chat
+                        </Button>
+                      ) : (
+                        <Button size="sm" className={`${option.color.replace('text-', 'bg-').replace('-600', '-600')} hover:${option.color.replace('text-', 'bg-').replace('-600', '-700')} text-white`}>
+                          {option.action}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
 
-        {/* Quick Actions */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {quickActions.map((action, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <action.icon className="h-5 w-5 text-gray-600" />
-                    <div>
-                      <p className="font-medium text-gray-900">{action.title}</p>
-                      <p className="text-sm text-gray-500">{action.subtitle}</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+            {/* Complaint Section (replaces phone call option) */}
+            <div className="p-4 bg-red-50 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
                 </div>
-              ))}
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900 mb-1">Raise a Complaint</h3>
+                  <p className="text-sm text-gray-600 mb-2">Report issues and track resolution with our support team</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Response within 1 hour</span>
+                    <Button size="sm" variant="outline" onClick={() => router.push('/support/complaint')} className="border-red-200 text-red-700 hover:bg-red-50">
+                      Open Complaint
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
-
         {/* FAQs */}
         <Card>
           <CardHeader>

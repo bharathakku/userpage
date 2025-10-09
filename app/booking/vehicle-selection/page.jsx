@@ -1,65 +1,131 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, MapPin, Clock, Edit, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { api } from '@/lib/api'
+import { computeFare, loadPricing } from '@/lib/pricing'
 
 export default function VehicleSelectionPage() {
   const router = useRouter()
   const [selectedVehicle, setSelectedVehicle] = useState(null)
+  const [vehicles, setVehicles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [pickupName, setPickupName] = useState('')
+  const [dropName, setDropName] = useState('')
+  const [routeInfo, setRouteInfo] = useState(null)
 
-  const vehicles = [
-    {
-      id: 'pickup-medium',
-      type: 'Medium Pickup',
-      subtitle: 'Heavy Duty',
-      distance: '7.3 km',
-      time: '8 mins',
-      capacity: 'Up to 1000 kg',
-      description: 'Perfect for medium to large deliveries',
-      price: 280,
-      originalPrice: 320,
-      image: '/images/pickup-truck-flaticon.png',
-      available: true,
-      estimatedTime: '8-12 mins'
-    },
-    {
-      id: 'heavy-truck',
-      type: 'Heavy Truck',
-      subtitle: 'Heavy Duty Truck',
-      distance: '4.0 km',
-      time: '12 mins',
-      capacity: 'Up to 750 kg',
-      description: 'Ideal for furniture, appliances & bulk items',
-      price: 495,
-      originalPrice: 520,
-      image: 'https://cdn-icons-png.flaticon.com/512/870/870130.png',
-      available: true,
-      estimatedTime: '12-18 mins'
-    },
-    {
-      id: 'pickup-small',
-      type: 'Small Pickup',
-      subtitle: 'Compact & Efficient',
-      distance: '5.2 km',
-      time: '15 mins',
-      capacity: 'Up to 500 kg',
-      description: 'Great for small deliveries',
-      price: 180,
-      originalPrice: 210,
-      image: 'https://cdn-icons-png.flaticon.com/512/6179/6179815.png',
-      available: true,
-      estimatedTime: '15-20 mins'
+  const locIqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY || ''
+
+  async function reverseGeocode(lat, lng) {
+    try {
+      if (!lat || !lng) return ''
+      if (locIqKey) {
+        const url = `https://us1.locationiq.com/v1/reverse?key=${locIqKey}&lat=${lat}&lon=${lng}&format=json`
+        const res = await fetch(url)
+        const data = await res.json()
+        return data?.display_name || ''
+      } else {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
+        const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+        const data = await res.json()
+        return data?.display_name || ''
+      }
+    } catch { return '' }
+  }
+
+  // Load selected route and resolve human-readable names
+  useEffect(() => {
+    try {
+      const route = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('bookingRoute') || 'null') : null
+      setRouteInfo(route)
+      if (route?.pickup) reverseGeocode(route.pickup.lat, route.pickup.lng).then(setPickupName)
+      if (route?.drop) reverseGeocode(route.drop.lat, route.drop.lng).then(setDropName)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    async function fetchVehicles() {
+      try {
+        setLoading(true)
+        setError(null)
+        // Ensure pricing is loaded from backend before computing fares (fallback inside lib if fails)
+        try { await loadPricing() } catch {}
+        const data = await api.get('/vehicles')
+        if (!mounted) return
+        // Backend returns: { id, type, title, capacityKg, basePrice, perKmPrice, imageUrl, isActive }
+        // Transform to frontend format
+        if (Array.isArray(data) && data.length > 0) {
+          const route = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('bookingRoute') || 'null') : null
+          const distanceKm = route?.distanceKm || 0
+          const images = {
+            'two-wheeler': 'https://img.icons8.com/color/96/scooter.png',
+            'three-wheeler': 'https://cdn-icons-png.flaticon.com/512/6179/6179815.png',
+            'heavy-truck': 'https://cdn-icons-png.flaticon.com/512/870/870130.png',
+          }
+          const defaultCaps = { 'two-wheeler': 50, 'three-wheeler': 500, 'heavy-truck': 1000 }
+          const transformedVehicles = data.map(vehicle => {
+            // Map backend id to our pricing keys
+            const typeLower = (vehicle.type || '').toLowerCase()
+            const pricingKey = vehicle.id || (typeLower.includes('truck') ? 'heavy-truck' : typeLower.includes('three') ? 'three-wheeler' : 'two-wheeler')
+            const fare = computeFare(pricingKey, distanceKm)
+            const capacityKg = vehicle.capacityKg || defaultCaps[pricingKey]
+            return ({
+              id: pricingKey,
+              type: vehicle.type,
+              subtitle: vehicle.title,
+              capacity: `${capacityKg} kg`,
+              description: `Up to ${capacityKg} kg capacity`,
+              price: fare.total,
+              originalPrice: undefined,
+              image: vehicle.imageUrl || images[pricingKey],
+              available: vehicle.isActive,
+              estimatedTime: '10-15 mins'
+            })
+          })
+          setVehicles(transformedVehicles)
+        } else {
+          throw new Error('Empty vehicles list')
+        }
+      } catch (e) {
+        if (!mounted) return
+        setError('Using default vehicle options')
+        // Fallback to previous static list
+        const route = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('bookingRoute') || 'null') : null
+        const distanceKm = route?.distanceKm || 0
+        setVehicles([
+          (() => { const f = computeFare('two-wheeler', distanceKm); return {
+            id: 'two-wheeler', type: 'Two Wheeler', subtitle: 'Fast & Light', distance: `${distanceKm.toFixed(1)} km`, time: '6-10 mins',
+            capacity: 'Up to 50 kg', description: 'Ideal for documents and small parcels', price: f.total, image: 'https://img.icons8.com/color/96/scooter.png', available: true, estimatedTime: '6-10 mins'
+          }})(),
+          (() => { const f = computeFare('three-wheeler', distanceKm); return {
+            id: 'three-wheeler', type: 'Three Wheeler', subtitle: 'Mid-size Deliveries', distance: `${distanceKm.toFixed(1)} km`, time: '10-15 mins',
+            capacity: 'Up to 500 kg', description: 'Perfect for medium loads and local deliveries', price: f.total, image: 'https://cdn-icons-png.flaticon.com/512/6179/6179815.png', available: true, estimatedTime: '10-15 mins'
+          }})(),
+          (() => { const f = computeFare('heavy-truck', distanceKm); return {
+            id: 'heavy-truck', type: 'Heavy Truck', subtitle: 'Heavy Duty Truck', distance: `${distanceKm.toFixed(1)} km`, time: '12-18 mins',
+            capacity: 'Up to 1000 kg', description: 'Ideal for furniture, appliances & bulk items', price: f.total, image: 'https://cdn-icons-png.flaticon.com/512/870/870130.png', available: true, estimatedTime: '12-18 mins'
+          }})(),
+        ])
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
-  ]
+    fetchVehicles()
+    return () => { mounted = false }
+  }, [])
 
   const handleProceed = () => {
     if (selectedVehicle) {
-      router.push('/booking/review')
+      const selected = vehicles.find(v => v.id === selectedVehicle)
+      const query = selected ? `?vehicleId=${encodeURIComponent(selected.id)}` : ''
+      router.push(`/booking/review${query}`)
     }
   }
 
@@ -108,7 +174,7 @@ export default function VehicleSelectionPage() {
               <div className="flex items-start gap-3">
                 <div className="w-3 h-3 bg-green-500 rounded-full mt-1.5"></div>
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900">Rohit Niwas, Sola</p>
+                  <p className="font-medium text-gray-900">{pickupName || 'Resolving pickup location...'}</p>
                   <p className="text-sm text-gray-600">Pick up location</p>
                 </div>
               </div>
@@ -116,7 +182,7 @@ export default function VehicleSelectionPage() {
               <div className="flex items-start gap-3">
                 <div className="w-3 h-3 bg-red-500 rounded-full mt-1.5"></div>
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900">Ashoka Arcade, Sola Road</p>
+                  <p className="font-medium text-gray-900">{dropName || 'Resolving drop location...'}</p>
                   <p className="text-sm text-gray-600">Drop location</p>
                 </div>
               </div>
@@ -126,6 +192,16 @@ export default function VehicleSelectionPage() {
 
         {/* Vehicle Options */}
         <div className="space-y-3 mb-20">
+          {loading && (
+            <Card className="border-gray-200">
+              <CardContent className="p-4 text-sm text-gray-600">Loading vehicles...</CardContent>
+            </Card>
+          )}
+          {!loading && error && (
+            <Card className="border-amber-300 bg-amber-50">
+              <CardContent className="p-4 text-sm text-amber-800">{error}</CardContent>
+            </Card>
+          )}
           {vehicles.map((vehicle) => {
             const isSelected = selectedVehicle === vehicle.id
             

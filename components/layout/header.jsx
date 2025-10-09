@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, Search, User, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useApp } from '@/contexts/AppContext'
 
 const navigation = [
   { name: 'Home', href: '/' },
@@ -17,6 +18,29 @@ const navigation = [
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
+  const { state, api } = useApp()
+  const [displayName, setDisplayName] = useState('')
+  const [mounted, setMounted] = useState(false)
+
+  // Keep header name in sync with context/localStorage
+  useEffect(() => {
+    if (!state.user?.isAuthenticated) {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+        if (token) api.getUserProfile()
+      } catch {}
+    }
+  }, [])
+
+  useEffect(() => {
+    const name = state.user?.name || (() => {
+      try { return JSON.parse(localStorage.getItem('user_data') || '{}').name || '' } catch { return '' }
+    })()
+    setDisplayName(name)
+  }, [state.user?.name])
+
+  // Mark mounted so client can safely render live value without SSR mismatch
+  useEffect(() => { setMounted(true) }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
@@ -90,7 +114,7 @@ export default function Header() {
               <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 opacity-0 blur-sm group-hover:opacity-20 transition-opacity"></div>
             </div>
             <div className="hidden sm:block">
-              <span className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Ramesh</span>
+              <span suppressHydrationWarning className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{mounted && displayName ? displayName : 'User'}</span>
               <p className="text-xs text-gray-500">Partner Enterprise</p>
             </div>
           </Link>

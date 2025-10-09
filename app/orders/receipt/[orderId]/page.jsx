@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { 
   ArrowLeft, 
@@ -17,77 +17,63 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { API_BASE_URL } from '@/lib/api/apiClient'
 
 export default function ReceiptPage() {
   const router = useRouter()
   const params = useParams()
   const orderId = params.orderId
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [order, setOrder] = useState(null)
+  const [fare, setFare] = useState(null)
+  const [driver, setDriver] = useState(null)
 
-  // Mock receipt data - in real app, this would be fetched based on orderId
-  const receiptData = {
-    id: orderId,
-    invoiceNumber: `INV-${orderId}`,
-    orderDate: '2024-01-20',
-    orderTime: '2:00 PM',
-    completedDate: '2024-01-20',
-    completedTime: '3:45 PM',
-    driver: {
-      name: 'Rajesh Kumar',
-      phone: '+91 98765 43210',
-      vehicle: 'Tata Ace',
-      plateNumber: 'DL 3C AB 1234'
-    },
-    customer: {
-      name: 'Ramesh Kumar',
-      phone: '+91 98765 43210',
-      email: 'ramesh@example.com'
-    },
-    pickup: {
-      address: 'Sector 48, Noida West',
-      contactName: 'Ramesh Kumar',
-      contactPhone: '+91 98765 43210'
-    },
-    dropoff: {
-      address: 'Connaught Place, Delhi',
-      contactName: 'Suresh Sharma',
-      contactPhone: '+91 98765 43211'
-    },
-    package: {
-      type: 'Documents',
-      weight: '2 kg',
-      description: 'Important office documents'
-    },
-    pricing: {
-      baseFare: 350,
-      distanceCharges: 120,
-      timeCharges: 25,
-      gst: 16.2,
-      serviceCharge: 8,
-      discount: 13,
-      total: 495
-    },
-    payment: {
-      method: 'UPI',
-      transactionId: 'TXN123456789',
-      status: 'Completed',
-      paidAt: '2:00 PM, 20 Jan 2024'
-    },
-    distance: '32 km',
-    duration: '1 hour 15 minutes',
-    gstDetails: {
-      gstin: 'YD123456789',
-      companyName: 'YourDelivery Private Limited',
-      address: 'Sector 18, Noida, UP - 201301'
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        setLoading(true); setError('')
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
+        // Order core
+        const res = await fetch(`${API_BASE_URL}/orders/${orderId}`, { headers })
+        if (!res.ok) throw new Error('Failed to load order')
+        const ord = await res.json()
+        if (!mounted) return
+        setOrder(ord)
+
+        // Fare breakdown
+        try {
+          const fr = await fetch(`${API_BASE_URL}/orders/${orderId}/fare`, { headers })
+          if (fr.ok) setFare(await fr.json())
+        } catch {}
+
+        // Driver details
+        if (ord?.driverId) {
+          try {
+            const dr = await fetch(`${API_BASE_URL}/drivers/${ord.driverId}`, { headers })
+            if (dr.ok) setDriver(await dr.json())
+          } catch {}
+        }
+      } catch (e) {
+        setError(e?.message || 'Failed to load receipt')
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
-  }
+    load()
+    return () => { mounted = false }
+  }, [orderId])
 
   const handleBack = () => {
     router.back()
   }
 
   const handleDownload = () => {
-    // In real app, this would generate and download PDF
-    alert('PDF download functionality would be implemented here')
+    // Use print-to-PDF (browser built-in) for now
+    window.print()
   }
 
   const handleShare = () => {
@@ -106,6 +92,32 @@ export default function ReceiptPage() {
   const handlePrint = () => {
     window.print()
   }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">Loading receipt...</div>
+    )
+  }
+  if (error || !order) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">{error || 'Receipt unavailable'}</div>
+    )
+  }
+
+  const invoiceNumber = `INV-${orderId}`
+  const company = { gstin: 'YD123456789', companyName: 'YourDelivery Private Limited', address: 'Sector 18, Noida, UP - 201301' }
+  const pricing = {
+    baseFare: Number(fare?.basePrice ?? order.price ?? 0),
+    distanceCharges: Math.max(0, Number((fare?.adjustedPrice ?? order.adjustedPrice ?? order.price ?? 0)) - Number(fare?.basePrice ?? order.price ?? 0)),
+    timeCharges: 0,
+    serviceCharge: 0,
+    gst: 0,
+    discount: 0,
+    total: Number(fare?.adjustedPrice ?? order.adjustedPrice ?? order.price ?? 0),
+  }
+  const pickupAddr = order?.from?.address || '-'
+  const dropAddr = order?.to?.address || '-'
+  const distanceStr = `${Number(order?.distanceKm ?? fare?.actualDistanceKm ?? 0).toFixed(2)} km`
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -181,7 +193,7 @@ export default function ReceiptPage() {
               
               <div className="text-center text-gray-600 text-sm">
                 <p>GST Invoice</p>
-                <p className="font-mono mt-1">#{receiptData.invoiceNumber}</p>
+                <p className="font-mono mt-1">#{invoiceNumber}</p>
               </div>
             </div>
 
@@ -189,9 +201,9 @@ export default function ReceiptPage() {
             <div className="mb-6 p-4 bg-gray-50 rounded-lg print:bg-transparent">
               <h3 className="font-semibold text-gray-900 mb-2">Company Details</h3>
               <div className="text-sm text-gray-600 space-y-1">
-                <p className="font-medium">{receiptData.gstDetails.companyName}</p>
-                <p>{receiptData.gstDetails.address}</p>
-                <p>GSTIN: {receiptData.gstDetails.gstin}</p>
+                <p className="font-medium">{company.companyName}</p>
+                <p>{company.address}</p>
+                <p>GSTIN: {company.gstin}</p>
               </div>
             </div>
 
@@ -206,19 +218,19 @@ export default function ReceiptPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Order ID:</span>
-                    <span className="font-medium">#{receiptData.id}</span>
+                    <span className="font-medium">#{orderId}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Order Date:</span>
-                    <span className="font-medium">{receiptData.orderDate}</span>
+                    <span className="font-medium">{new Date(order.createdAt).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Completed:</span>
-                    <span className="font-medium">{receiptData.completedDate}</span>
+                    <span className="font-medium">{order.updatedAt ? new Date(order.updatedAt).toLocaleString() : '-'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Duration:</span>
-                    <span className="font-medium">{receiptData.duration}</span>
+                    <span className="font-medium">—</span>
                   </div>
                 </div>
               </div>
@@ -232,15 +244,15 @@ export default function ReceiptPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Name:</span>
-                    <span className="font-medium">{receiptData.customer.name}</span>
+                    <span className="font-medium">{order?.customer?.name || '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Phone:</span>
-                    <span className="font-medium">{receiptData.customer.phone}</span>
+                    <span className="font-medium">{order?.customer?.phone || '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Email:</span>
-                    <span className="font-medium text-xs">{receiptData.customer.email}</span>
+                    <span className="font-medium text-xs">—</span>
                   </div>
                 </div>
               </div>
@@ -259,8 +271,8 @@ export default function ReceiptPage() {
                   <div className="w-3 h-3 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
                   <div className="flex-1">
                     <p className="font-medium text-green-800 mb-1">Pickup Location</p>
-                    <p className="text-sm text-green-700">{receiptData.pickup.address}</p>
-                    <p className="text-xs text-green-600 mt-1">Contact: {receiptData.pickup.contactName}</p>
+                    <p className="text-sm text-green-700">{pickupAddr}</p>
+                    <p className="text-xs text-green-600 mt-1">&nbsp;</p>
                   </div>
                 </div>
 
@@ -269,8 +281,8 @@ export default function ReceiptPage() {
                   <div className="w-3 h-3 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
                   <div className="flex-1">
                     <p className="font-medium text-blue-800 mb-1">Dropoff Location</p>
-                    <p className="text-sm text-blue-700">{receiptData.dropoff.address}</p>
-                    <p className="text-xs text-blue-600 mt-1">Contact: {receiptData.dropoff.contactName}</p>
+                    <p className="text-sm text-blue-700">{dropAddr}</p>
+                    <p className="text-xs text-blue-600 mt-1">ETA: —</p>
                   </div>
                 </div>
 
@@ -279,17 +291,17 @@ export default function ReceiptPage() {
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Package Details</h4>
                     <div className="text-sm text-gray-600 space-y-1">
-                      <p>Type: {receiptData.package.type}</p>
-                      <p>Weight: {receiptData.package.weight}</p>
-                      <p>Distance: {receiptData.distance}</p>
+                      <p>Type: {order?.vehicleType || '—'}</p>
+                      <p>Weight: —</p>
+                      <p>Distance: {distanceStr}</p>
                     </div>
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Driver Details</h4>
                     <div className="text-sm text-gray-600 space-y-1">
-                      <p>Name: {receiptData.driver.name}</p>
-                      <p>Vehicle: {receiptData.driver.vehicle}</p>
-                      <p>Plate: {receiptData.driver.plateNumber}</p>
+                      <p>Name: {driver?.userId?.name || '—'}</p>
+                      <p>Vehicle: {driver?.vehicleType || '—'}</p>
+                      <p>Plate: {driver?.vehicleNumber || '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -308,11 +320,11 @@ export default function ReceiptPage() {
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
                   <div>
                     <p className="font-medium text-gray-900">Payment Method</p>
-                    <p className="text-sm text-gray-600">{receiptData.payment.method}</p>
+                    <p className="text-sm text-gray-600">{order?.paymentMethod || 'Cash on Delivery'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-green-600">{receiptData.payment.status}</p>
-                    <p className="text-xs text-gray-500">TXN: {receiptData.payment.transactionId}</p>
+                    <p className="font-medium text-green-600">{String(order?.status||'').toLowerCase()==='delivered' ? 'Completed' : (order?.status||'-')}</p>
+                    <p className="text-xs text-gray-500">TXN: —</p>
                   </div>
                 </div>
 
@@ -320,34 +332,34 @@ export default function ReceiptPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Base Fare</span>
-                    <span>₹{receiptData.pricing.baseFare}</span>
+                    <span>₹{pricing.baseFare}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Distance Charges ({receiptData.distance})</span>
-                    <span>₹{receiptData.pricing.distanceCharges}</span>
+                    <span className="text-gray-600">Distance Charges ({distanceStr})</span>
+                    <span>₹{pricing.distanceCharges}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Time Charges</span>
-                    <span>₹{receiptData.pricing.timeCharges}</span>
+                    <span>₹{pricing.timeCharges}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Service Charge</span>
-                    <span>₹{receiptData.pricing.serviceCharge}</span>
+                    <span>₹{pricing.serviceCharge}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">GST (18%)</span>
-                    <span>₹{receiptData.pricing.gst}</span>
+                    <span className="text-gray-600">GST</span>
+                    <span>₹{pricing.gst}</span>
                   </div>
-                  {receiptData.pricing.discount > 0 && (
+                  {pricing.discount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Discount</span>
-                      <span>-₹{receiptData.pricing.discount}</span>
+                      <span>-₹{pricing.discount}</span>
                     </div>
                   )}
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total Amount</span>
-                      <span className="text-green-600">₹{receiptData.pricing.total}</span>
+                      <span className="text-green-600">₹{pricing.total}</span>
                     </div>
                   </div>
                 </div>

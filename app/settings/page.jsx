@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   User, 
@@ -10,21 +10,35 @@ import {
   Gift, 
   ChevronRight,
   Edit3,
-  Plus
+  Plus,
+  LogOut
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useApp } from '@/contexts/AppContext'
 
 export default function SettingsPage() {
   const router = useRouter()
+  const { state, api, dispatch, actionTypes } = useApp()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
 
-  const userProfile = {
-    name: 'Ramesh',
-    email: 'ramesh@gmail.com',
-    phone: '+91 9876543210',
-    verified: true,
-    gstNumber: null
-  }
+  // ensure user is loaded so we show latest values
+  useEffect(() => {
+    if (!state.user?.isAuthenticated) {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+        if (token) api.getUserProfile()
+      } catch {}
+    }
+  }, [])
+
+  // derive display values from context or localStorage fallback
+  useEffect(() => {
+    const local = (() => { try { return JSON.parse(localStorage.getItem('user_data') || '{}') } catch { return {} } })()
+    setName(state.user?.name || local.name || '—')
+    setEmail(state.user?.email || local.email || '—')
+  }, [state.user?.name, state.user?.email])
 
   const settingsMenuItems = [
     {
@@ -64,6 +78,17 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLogout = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user_data')
+      }
+    } catch {}
+    dispatch && dispatch({ type: actionTypes.LOGOUT_USER })
+    router.replace('/auth/login')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
@@ -84,13 +109,13 @@ export default function SettingsPage() {
               {/* Profile Info */}
               <div className="flex-1">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">
-                  {userProfile.name}
+                  {name}
                 </h2>
                 <p className="text-sm text-gray-600 mb-1">
-                  {userProfile.email}
+                  {email}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {userProfile.verified ? 'Verify Email ID' : 'Email not verified'}
+                  Verify Email ID
                 </p>
               </div>
               
@@ -99,6 +124,7 @@ export default function SettingsPage() {
                 variant="outline"
                 size="sm"
                 className="text-blue-600 border-blue-300 hover:bg-blue-50 self-start sm:self-center"
+                onClick={() => router.push('/profile')}
               >
                 Edit Profile
               </Button>
@@ -165,6 +191,20 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Logout */}
+        <Card className="mt-6">
+          <CardContent className="p-4">
+            <button
+              onClick={handleLogout}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
+            >
+              <LogOut className="h-5 w-5" />
+              Log out
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-2">You will be redirected to login</p>
           </CardContent>
         </Card>
 
