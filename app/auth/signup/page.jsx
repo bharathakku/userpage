@@ -9,6 +9,7 @@ import Link from 'next/link'
 import OTPInput from '@/components/ui/OTPInput'
 import { useAuth } from '@/contexts/AuthContext'
 import { validatePhoneNumber } from '@/lib/phoneUtils'
+import { API_BASE_URL } from '@/lib/api/apiClient'
 
 export default function SignupPage() {
   const [name, setName] = useState('')
@@ -42,8 +43,7 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL || ''
-      const res = await fetch(`${base}/api/auth/phone/send`, {
+      const res = await fetch(`${API_BASE_URL}/auth/phone/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: `+91${validation.cleaned}` })
@@ -67,8 +67,7 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL || ''
-      const res = await fetch(`${base}/api/auth/phone/verify`, {
+      const res = await fetch(`${API_BASE_URL}/auth/phone/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: phoneToken, code: enteredOTP, role: 'customer', name })
@@ -80,8 +79,18 @@ export default function SignupPage() {
       localStorage.setItem('auth_token', data.token)
       localStorage.setItem('user_data', JSON.stringify(data.user))
       try { setSession(data.user, data.token) } catch {}
-      try { document.cookie = `auth_token=${data.token}; Path=/; SameSite=Lax`; } catch {}
-      setTimeout(() => { router.push('/') }, 500)
+      // Persistent cookie with Secure on HTTPS; then wait until cookie visible
+      try {
+        const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+        document.cookie = `auth_token=${data.token}; Path=/; Max-Age=604800; SameSite=Lax${secure}`
+      } catch {}
+      const start = Date.now()
+      const waitForCookie = () => {
+        try { if (document.cookie.includes('auth_token=')) { router.push('/'); return } } catch {}
+        if (Date.now() - start > 1000) { window.location.href = '/'; return }
+        setTimeout(waitForCookie, 50)
+      }
+      waitForCookie()
     } catch (err) {
       setError(err.message || 'Network error. Please try again.')
     } finally {
@@ -95,8 +104,7 @@ export default function SignupPage() {
 
     try {
       const validation = validatePhoneNumber(phoneNumber)
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL || ''
-      const res = await fetch(`${base}/api/auth/phone/send`, {
+      const res = await fetch(`${API_BASE_URL}/auth/phone/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: `+91${validation.cleaned}` })
