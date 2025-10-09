@@ -1,6 +1,7 @@
 'use client';
+export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { ArrowLeft, Truck, MapPin, Clock, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +11,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import OrderService from '@/lib/orderService';
 import { computeFare, formatCurrencyINR, WAITING_RULES } from '@/lib/pricing'
 
+// Wrap URL hooks in Suspense to satisfy Next.js prerender rules
 export default function BookingReviewPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-600">Loading...</div>}>
+      <BookingReviewInner />
+    </Suspense>
+  )
+}
+
+function BookingReviewInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated, user } = useAuth();
