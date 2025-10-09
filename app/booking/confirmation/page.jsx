@@ -1,6 +1,7 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { ArrowLeft, MapPin, Phone, Star, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +9,16 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { api } from '@/lib/api'
 
+// Wrap the URL hooks usage in Suspense to satisfy Next.js prerender requirements
 export default function BookingConfirmationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-600">Loading...</div>}>
+      <BookingConfirmationInner />
+    </Suspense>
+  )
+}
+
+function BookingConfirmationInner() {
   const router = useRouter()
   const params = useSearchParams()
   const orderId = params.get('orderId')
