@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { 
   ArrowLeft, 
@@ -19,67 +19,55 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ordersService } from '@/lib/api/apiClient'
 
 export default function OrderDetailsPage() {
   const router = useRouter()
   const params = useParams()
   const orderId = params.orderId
 
-  // Mock order data - in real app, this would be fetched based on orderId
-  const orderDetails = {
-    id: orderId,
-    status: 'in_transit',
-    bookingDate: '2024-01-20',
-    bookingTime: '2:00 PM',
-    driver: {
-      name: 'Rajesh Kumar',
-      phone: '+91 98765 43210',
-      vehicle: 'Tata Ace',
-      plateNumber: 'DL 3C AB 1234',
-      rating: 4.8,
-      totalTrips: 1250
-    },
-    pickup: {
-      address: 'Sector 48, Noida West',
-      contactName: 'Ramesh Kumar',
-      contactPhone: '+91 98765 43210',
-      instructions: 'Gate No. 2, Blue Building',
-      scheduledTime: '2:30 PM',
-      actualTime: '2:30 PM'
-    },
-    dropoff: {
-      address: 'Connaught Place, Delhi',
-      contactName: 'Suresh Sharma',
-      contactPhone: '+91 98765 43211',
-      instructions: 'Main entrance, ask for security',
-      scheduledTime: '3:15 PM',
-      actualTime: null
-    },
-    package: {
-      type: 'Documents',
-      weight: '2 kg',
-      dimensions: '30cm x 20cm x 5cm',
-      value: '₹500',
-      description: 'Important office documents'
-    },
-    pricing: {
-      baseFare: 350,
-      distanceCharges: 120,
-      timeCharges: 25,
-      tax: 18,
-      discount: 13,
-      total: 495
-    },
-    payment: {
-      method: 'UPI',
-      transactionId: 'TXN123456789',
-      status: 'Completed',
-      paidAt: '2:00 PM, 20 Jan 2024'
-    },
-    distance: '32 km',
-    estimatedDuration: '45 mins',
-    actualDuration: null
-  }
+  const [order, setOrder] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const notifiedRef = useRef(false)
+
+  const load = useCallback(async () => {
+    try {
+      setError('')
+      const res = await ordersService.getById(orderId)
+      const data = res?.data || res // depending on api wrapper
+      setOrder(data)
+    } catch (e) {
+      setError(e?.message || 'Failed to load order')
+    } finally {
+      setLoading(false)
+    }
+  }, [orderId])
+
+  useEffect(() => { load() }, [load])
+
+  // Poll every 10s until completed
+  useEffect(() => {
+    if (!order || ['delivered','completed','cancelled'].includes((order.status||'').toLowerCase())) return
+    const t = setInterval(load, 10000)
+    return () => clearInterval(t)
+  }, [order, load])
+
+  // Notify customer once when order completes
+  useEffect(() => {
+    const isDone = ['delivered','completed'].includes((order?.status||'').toLowerCase())
+    if (!isDone || notifiedRef.current) return
+    notifiedRef.current = true
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') {
+            new Notification('Delivery completed', { body: `Order #${orderId} has been delivered.` })
+          }
+        })
+      }
+    } catch {}
+  }, [order, orderId])
 
   const handleBack = () => {
     router.back()
@@ -106,6 +94,8 @@ export default function OrderDetailsPage() {
         return 'text-blue-600 bg-blue-50 border-blue-200'
       case 'completed':
         return 'text-green-600 bg-green-50 border-green-200'
+      case 'delivered':
+        return 'text-green-600 bg-green-50 border-green-200'
       case 'cancelled':
         return 'text-red-600 bg-red-50 border-red-200'
       default:
@@ -129,6 +119,10 @@ export default function OrderDetailsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
+        {loading && (<div className="py-10 text-center">Loading...</div>)}
+        {error && (<div className="py-3 text-center text-red-600">{error}</div>)}
+        {!loading && order && (
+        <>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -145,8 +139,8 @@ export default function OrderDetailsPage() {
               <p className="text-sm text-gray-600">#{orderId}</p>
             </div>
           </div>
-          <div className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(orderDetails.status)}`}>
-            {getStatusText(orderDetails.status)}
+          <div className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
+            {getStatusText(order.status)}
           </div>
         </div>
 
@@ -163,20 +157,20 @@ export default function OrderDetailsPage() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-gray-500">Booking Date</p>
-                  <p className="font-medium">{orderDetails.bookingDate}</p>
+                  <p className="font-medium">{new Date(order.createdAt||Date.now()).toLocaleDateString()}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Booking Time</p>
-                  <p className="font-medium">{orderDetails.bookingTime}</p>
+                  <p className="font-medium">{new Date(order.createdAt||Date.now()).toLocaleTimeString()}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Distance</p>
-                  <p className="font-medium">{orderDetails.distance}</p>
+                  <p className="font-medium">{order?.distanceKm != null ? `${order.distanceKm} km` : '-'}</p>
                 </div>
                 <div>
                   <p className="text-gray-500">Duration</p>
                   <p className="font-medium">
-                    {orderDetails.actualDuration || orderDetails.estimatedDuration}
+                    {order?.estimatedTime || '-'}
                   </p>
                 </div>
               </div>
@@ -197,19 +191,20 @@ export default function OrderDetailsPage() {
                   <User className="h-8 w-8 text-gray-600" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900">{orderDetails.driver.name}</h4>
+                  <h4 className="font-semibold text-gray-900">{order?.driver?.name || 'Driver'}</h4>
                   <p className="text-sm text-gray-600 mb-1">
-                    {orderDetails.driver.vehicle} • {orderDetails.driver.plateNumber}
+                    {(order?.vehicleType || 'Vehicle')} • {(order?.driver?.vehicleNumber || '—')}
                   </p>
-                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
-                    <span>⭐ {orderDetails.driver.rating} rating</span>
-                    <span>• {orderDetails.driver.totalTrips} trips</span>
-                  </div>
+                  {order?.driver?.rating != null && (
+                    <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+                      <span>⭐ {order.driver.rating} rating</span>
+                    </div>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     className="flex items-center gap-2"
-                    onClick={() => window.open(`tel:${orderDetails.driver.phone}`)}
+                    onClick={() => order?.driver?.phone && window.open(`tel:${order.driver.phone}`)}
                   >
                     <Phone className="h-4 w-4" />
                     Call Driver
@@ -236,16 +231,7 @@ export default function OrderDetailsPage() {
                     <h4 className="font-medium text-gray-900">Pickup Location</h4>
                   </div>
                   <div className="ml-5 space-y-2 text-sm">
-                    <p className="font-medium">{orderDetails.pickup.address}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-600">
-                      <p>Contact: {orderDetails.pickup.contactName}</p>
-                      <p>Phone: {orderDetails.pickup.contactPhone}</p>
-                      <p className="col-span-1 sm:col-span-2">
-                        Instructions: {orderDetails.pickup.instructions}
-                      </p>
-                      <p>Scheduled: {orderDetails.pickup.scheduledTime}</p>
-                      <p className="text-green-600">Completed: {orderDetails.pickup.actualTime}</p>
-                    </div>
+                    <p className="font-medium">{order?.from?.address || '—'}</p>
                   </div>
                 </div>
 
@@ -259,59 +245,15 @@ export default function OrderDetailsPage() {
                     <h4 className="font-medium text-gray-900">Dropoff Location</h4>
                   </div>
                   <div className="ml-5 space-y-2 text-sm">
-                    <p className="font-medium">{orderDetails.dropoff.address}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-600">
-                      <p>Contact: {orderDetails.dropoff.contactName}</p>
-                      <p>Phone: {orderDetails.dropoff.contactPhone}</p>
-                      <p className="col-span-1 sm:col-span-2">
-                        Instructions: {orderDetails.dropoff.instructions}
-                      </p>
-                      <p>Scheduled: {orderDetails.dropoff.scheduledTime}</p>
-                      <p className="text-blue-600">
-                        {orderDetails.dropoff.actualTime ? 
-                          `Completed: ${orderDetails.dropoff.actualTime}` : 
-                          'In Progress'
-                        }
-                      </p>
-                    </div>
+                    <p className="font-medium">{order?.to?.address || '—'}</p>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Package Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Package Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-500 mb-1">Package Type</p>
-                  <p className="font-medium">{orderDetails.package.type}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 mb-1">Weight</p>
-                  <p className="font-medium">{orderDetails.package.weight}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 mb-1">Dimensions</p>
-                  <p className="font-medium">{orderDetails.package.dimensions}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 mb-1">Declared Value</p>
-                  <p className="font-medium">{orderDetails.package.value}</p>
-                </div>
-                <div className="sm:col-span-2">
-                  <p className="text-gray-500 mb-1">Description</p>
-                  <p className="font-medium">{orderDetails.package.description}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Payment Information */}
+          {/* Payment Information (shown only if present) */}
+          {order?.payment && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -320,56 +262,34 @@ export default function OrderDetailsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Payment Method */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Payment Method</span>
-                  <span className="text-sm font-medium">{orderDetails.payment.method}</span>
+                  <span className="text-sm font-medium">{order.payment.method || '—'}</span>
                 </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Transaction ID</span>
-                  <span className="text-sm font-mono">{orderDetails.payment.transactionId}</span>
-                </div>
+                {order.payment.transactionId && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">Transaction ID</span>
+                    <span className="text-sm font-mono">{order.payment.transactionId}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Payment Status</span>
-                  <span className="text-sm font-medium text-green-600">{orderDetails.payment.status}</span>
+                  <span className="text-sm font-medium text-green-600">{order.payment.status || '—'}</span>
                 </div>
               </div>
-
-              {/* Price Breakdown */}
               <div className="pt-4 border-t">
-                <h4 className="font-medium mb-3">Price Breakdown</h4>
+                <h4 className="font-medium mb-3">Price</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Base Fare</span>
-                    <span>₹{orderDetails.pricing.baseFare}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Distance Charges</span>
-                    <span>₹{orderDetails.pricing.distanceCharges}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Time Charges</span>
-                    <span>₹{orderDetails.pricing.timeCharges}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tax & Fees</span>
-                    <span>₹{orderDetails.pricing.tax}</span>
-                  </div>
-                  {orderDetails.pricing.discount > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span>-₹{orderDetails.pricing.discount}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between pt-2 border-t font-semibold text-lg">
-                    <span>Total Amount</span>
-                    <span className="text-green-600">₹{orderDetails.pricing.total}</span>
+                    <span className="text-gray-600">Total Amount</span>
+                    <span>₹{order.price ?? order.amount ?? '-'}</span>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -403,12 +323,14 @@ export default function OrderDetailsPage() {
           <Card>
             <CardContent className="p-4">
               <div className="text-center text-sm text-gray-500">
-                <p>Order placed on {orderDetails.payment.paidAt}</p>
+                <p>Order placed on {new Date(order?.createdAt || Date.now()).toLocaleString()}</p>
                 <p className="mt-1">Need help? Contact our support team</p>
               </div>
             </CardContent>
           </Card>
         </div>
+        </>
+        )}
       </div>
     </div>
   )
