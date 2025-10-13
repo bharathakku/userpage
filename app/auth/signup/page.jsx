@@ -20,6 +20,7 @@ export default function SignupPage() {
   const [phoneToken, setPhoneToken] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [devCode, setDevCode] = useState('')
   const router = useRouter()
   const { setSession } = useAuth()
 
@@ -51,6 +52,7 @@ export default function SignupPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to send OTP')
       setPhoneToken(data.token)
+      setDevCode(String(data.devCode || ''))
       setSuccess('OTP sent successfully!')
       setStep('otp')
       setPhoneNumber(validation.formatted)
@@ -112,6 +114,7 @@ export default function SignupPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to resend OTP')
       setPhoneToken(data.token)
+      setDevCode(String(data.devCode || ''))
       setSuccess('OTP resent successfully!')
     } catch (err) {
       setError(err.message || 'Network error. Please try again.')
@@ -125,6 +128,7 @@ export default function SignupPage() {
     setOtp('')
     setError('')
     setSuccess('')
+    setDevCode('')
   }
 
   return (
@@ -246,6 +250,13 @@ export default function SignupPage() {
                     We've sent a 6-digit code to <br />
                     <span className="font-medium text-gray-900">{phoneNumber}</span>
                   </p>
+
+                  {devCode && (
+                    <div className="mx-auto mb-4 w-full max-w-xs rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 p-3">
+                      <p className="text-xs text-gray-600">Your verification code</p>
+                      <p className="mt-1 text-2xl font-extrabold tracking-widest text-blue-700">{devCode}</p>
+                    </div>
+                  )}
                   
                   <OTPInput
                     onComplete={handleOTPComplete}
