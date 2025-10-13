@@ -2,65 +2,73 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Phone, Loader2, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
-import OTPInput from '@/components/ui/OTPInput'
 import { API_BASE_URL } from '@/lib/api/apiClient'
-import { validatePhoneNumber } from '@/lib/phoneUtils'
+ 
 
 export default function LoginPage() {
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const [otp, setOtp] = useState('')
-  const [step, setStep] = useState('phone') // 'phone' or 'otp'
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [phoneToken, setPhoneToken] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [captchaA, setCaptchaA] = useState(0)
+  const [captchaB, setCaptchaB] = useState(0)
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
   const router = useRouter()
-
-  // OTP-only authentication (demo login removed)
 
   // Avoid hydration mismatches from extension-injected DOM (e.g., password managers)
   useEffect(() => {
     setMounted(true)
+    regenCaptcha()
   }, [])
 
-  const handlePhoneSubmit = async (e) => {
+  const regenCaptcha = () => {
+    setCaptchaA(() => Math.floor(1 + Math.random() * 9))
+    setCaptchaB(() => Math.floor(1 + Math.random() * 9))
+    setCaptchaAnswer('')
+  }
+
+  const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
-
-    const validation = validatePhoneNumber(phoneNumber)
-    
-    if (!validation.isValid) {
-      setError('Please enter a valid 10-digit mobile number')
+    if (parseInt(captchaAnswer, 10) !== (captchaA + captchaB)) {
+      setError('Captcha is incorrect')
       return
     }
-
     setIsLoading(true)
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/phone/send`, {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: `+91${validation.cleaned}` })
+        body: JSON.stringify({ email, password })
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to send OTP')
-      setPhoneToken(data.token)
-      setSuccess('OTP sent successfully!')
-      setStep('otp')
-      setPhoneNumber(validation.formatted)
-      // Dev-only aid: auto-complete OTP using devCode if provided by backend
-      if (data.devCode) {
-        try { setTimeout(() => handleOTPComplete(String(data.devCode)), 200) } catch {}
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials')
+      setSuccess('Login successful!')
+      localStorage.setItem('auth_token', data.token)
+      localStorage.setItem('user_data', JSON.stringify(data.user))
+      try {
+        const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+        document.cookie = `auth_token=${data.token}; Path=/; Max-Age=604800; SameSite=Lax${secure}`
+      } catch {}
+      const start = Date.now()
+      const waitForCookie = () => {
+        try {
+          if (document.cookie.includes('auth_token=')) { router.push('/'); return }
+        } catch {}
+        if (Date.now() - start > 1000) { window.location.href = '/'; return }
+        setTimeout(waitForCookie, 50)
       }
+      waitForCookie()
     } catch (err) {
       setError(err.message || 'Network error. Please try again.')
-      setIsLoading(false)
     } finally {
       setIsLoading(false)
     }
@@ -157,19 +165,15 @@ export default function LoginPage() {
                 </Button>
               </Link>
               <h1 className="text-2xl font-bold">
-                {step === 'phone' ? 'Welcome Back' : 'Verify OTP'}
+                Welcome Back
               </h1>
             </div>
             <CardDescription>
-              {step === 'phone' 
-                ? 'Enter your mobile number to continue' 
-                : `We've sent a 6-digit code to ${phoneNumber}`
-              }
+              Sign in with your email and password
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {step === 'phone' ? (
-              <form onSubmit={handlePhoneSubmit} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4">
                 {error && (
                   <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
                     <AlertCircle className="h-4 w-4" />
@@ -185,34 +189,63 @@ export default function LoginPage() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mobile Number
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   {mounted ? (
                     <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
-                        type="tel"
-                        inputMode="numeric"
-                        autoComplete="tel"
+                        type="email"
+                        autoComplete="email"
                         data-lpignore="true"
                         data-1p-ignore="true"
                         data-bwignore="true"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-                        placeholder="Enter your 10-digit mobile number"
-                        maxLength={10}
+                        placeholder="you@example.com"
                         required
                       />
                     </div>
                   ) : (
-                    // Render a stable placeholder on server and initial client render
                     <div className="h-12 w-full border border-gray-200 rounded-lg bg-gray-50" />
                   )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    We'll send you a verification code
-                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                      placeholder="Enter your password"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Captcha</label>
+                  <div className="flex items-center gap-3">
+                    <div className="px-3 py-2 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 text-lg font-bold">
+                      {captchaA} + {captchaB} = ?
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={captchaAnswer}
+                      onChange={(e) => setCaptchaAnswer(e.target.value.replace(/\D/g, ''))}
+                      className="w-24 text-center py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Ans"
+                      required
+                    />
+                    <Button type="button" variant="outline" onClick={regenCaptcha} title="Refresh captcha">
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <Button
@@ -223,76 +256,13 @@ export default function LoginPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending OTP...
+                      Signing in...
                     </>
                   ) : (
-                    <>
-                      Send OTP
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
+                    'Sign In'
                   )}
                 </Button>
               </form>
-            ) : (
-              <div className="space-y-6">
-                {error && (
-                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="text-sm">{error}</span>
-                  </div>
-                )}
-
-                {success && (
-                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm">{success}</span>
-                  </div>
-                )}
-
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Enter Verification Code
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-6">
-                    We've sent a 6-digit code to <br />
-                    <span className="font-medium text-gray-900">{phoneNumber}</span>
-                  </p>
-                  
-                  <OTPInput
-                    onComplete={handleOTPComplete}
-                    isLoading={isLoading}
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <Button
-                    onClick={handleResendOTP}
-                    variant="outline"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Resending...
-                      </>
-                    ) : (
-                      'Resend OTP'
-                    )}
-                  </Button>
-
-                  <Button
-                    onClick={handleBackToPhone}
-                    variant="ghost"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Change Number
-                  </Button>
-                </div>
-              </div>
-            )}
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
