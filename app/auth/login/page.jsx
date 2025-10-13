@@ -267,12 +267,11 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+            <div className="mt-6 text-sm text-gray-600 flex items-center justify-between">
+              <Link href="/auth/forgot-password" className="text-blue-600 hover:text-blue-700 font-medium">Forgot password?</Link>
+              <p>
                 Don't have an account?{' '}
-                <Link href="/auth/signup" className="text-blue-600 hover:text-blue-700 font-medium">
-                  Sign up
-                </Link>
+                <Link href="/auth/signup" className="text-blue-600 hover:text-blue-700 font-medium">Sign up</Link>
               </p>
             </div>
           </CardContent>
