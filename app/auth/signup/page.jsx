@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, User, Mail, Lock, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react'
+import { ArrowLeft, User, Mail, Lock, Loader2, AlertCircle, CheckCircle, RefreshCw, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
@@ -12,6 +12,7 @@ import { API_BASE_URL } from '@/lib/api/apiClient'
 export default function SignupPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [step, setStep] = useState('details') // keep structure but no OTP step
   const [isLoading, setIsLoading] = useState(false)
@@ -39,6 +40,12 @@ export default function SignupPage() {
       return
     }
 
+    const digits = (phone || '').replace(/\D/g, '')
+    if (!/^\d{10}$/.test(digits)) {
+      setError('Please enter a valid 10-digit mobile number')
+      return
+    }
+
     if (parseInt(captchaAnswer, 10) !== (captchaA + captchaB)) {
       setError('Captcha is incorrect')
       return
@@ -50,7 +57,7 @@ export default function SignupPage() {
       const res = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, role: 'customer' })
+        body: JSON.stringify({ name, email, phone: `+91${digits}`, password, role: 'customer' })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Signup failed')
@@ -90,14 +97,11 @@ export default function SignupPage() {
                 </Button>
               </Link>
               <h1 className="text-2xl font-bold">
-                {step === 'details' ? 'Create Account' : 'Verify OTP'}
+                Create Account
               </h1>
             </div>
             <CardDescription>
-              {step === 'details' 
-                ? 'Sign up to start using our delivery services' 
-                : `We've sent a 6-digit code to ${phoneNumber}`
-              }
+              Sign up to start using our delivery services
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -147,6 +151,23 @@ export default function SignupPage() {
                       required
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0,10))}
+                      className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                      placeholder="10-digit mobile number"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">India numbers only (auto +91)</p>
                 </div>
 
                 <div>

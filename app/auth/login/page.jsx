@@ -44,10 +44,13 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      const digits = (email || '').replace(/\D/g, '')
+      const isPhone = /^\d{10}$/.test(digits)
+      const payload = isPhone ? { phone: `+91${digits}`, password } : { email, password }
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Invalid credentials')
@@ -189,20 +192,20 @@ export default function LoginPage() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email or Phone</label>
                   {mounted ? (
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
-                        type="email"
-                        autoComplete="email"
+                        type="text"
+                        autoComplete="username"
                         data-lpignore="true"
                         data-1p-ignore="true"
                         data-bwignore="true"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-                        placeholder="you@example.com"
+                        placeholder="you@example.com or 10-digit phone"
                         required
                       />
                     </div>
