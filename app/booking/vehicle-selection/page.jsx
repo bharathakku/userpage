@@ -64,6 +64,15 @@ export default function VehicleSelectionPage() {
         if (Array.isArray(data) && data.length > 0) {
           const route = typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('bookingRoute') || 'null') : null
           const distanceKm = route?.distanceKm || 0
+          // Fetch live availability of nearby online+active drivers grouped by vehicle type
+          let counts = {}
+          try {
+            const plat = route?.pickup?.lat || route?.drop?.lat
+            const plng = route?.pickup?.lng || route?.drop?.lng
+            const qs = (plat && plng) ? `?lat=${encodeURIComponent(plat)}&lng=${encodeURIComponent(plng)}&maxDistanceMeters=15000` : ''
+            const avail = await api.get(`/drivers/availability${qs}`)
+            counts = avail?.counts || {}
+          } catch {}
           const images = {
             'two-wheeler': 'https://img.icons8.com/color/96/scooter.png',
             'three-wheeler': 'https://cdn-icons-png.flaticon.com/512/6179/6179815.png',
@@ -76,6 +85,7 @@ export default function VehicleSelectionPage() {
             const pricingKey = vehicle.id || (typeLower.includes('truck') ? 'heavy-truck' : typeLower.includes('three') ? 'three-wheeler' : 'two-wheeler')
             const fare = computeFare(pricingKey, distanceKm)
             const capacityKg = vehicle.capacityKg || defaultCaps[pricingKey]
+            const isAvailFromCounts = (counts && Object.prototype.hasOwnProperty.call(counts, pricingKey)) ? (counts[pricingKey] > 0) : true
             return ({
               id: pricingKey,
               type: vehicle.type,
@@ -85,7 +95,7 @@ export default function VehicleSelectionPage() {
               price: fare.total,
               originalPrice: undefined,
               image: vehicle.imageUrl || images[pricingKey],
-              available: vehicle.isActive,
+              available: isAvailFromCounts,
               estimatedTime: '10-15 mins'
             })
           })
