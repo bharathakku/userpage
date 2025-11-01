@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [hasHydrated, setHasHydrated] = useState(false)
   const [captchaA, setCaptchaA] = useState(0)
   const [captchaB, setCaptchaB] = useState(0)
   const [captchaAnswer, setCaptchaAnswer] = useState('')
@@ -24,6 +25,7 @@ export default function LoginPage() {
   // Avoid hydration mismatches from extension-injected DOM (e.g., password managers)
   useEffect(() => {
     setMounted(true)
+    setHasHydrated(true)
     regenCaptcha()
   }, [])
 
@@ -193,8 +195,10 @@ export default function LoginPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email or Phone</label>
-                  {mounted ? (
-                    <div className="relative">
+                  {!hasHydrated ? (
+                    <div className="h-12 w-full border border-gray-200 rounded-lg bg-gray-50" />
+                  ) : (
+                    <div suppressHydrationWarning className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
                         type="text"
@@ -209,25 +213,27 @@ export default function LoginPage() {
                         required
                       />
                     </div>
-                  ) : (
-                    <div className="h-12 w-full border border-gray-200 rounded-lg bg-gray-50" />
                   )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
-                      placeholder="Enter your password"
-                      required
-                    />
-                  </div>
+                  {!hasHydrated ? (
+                    <div className="h-12 w-full border border-gray-200 rounded-lg bg-gray-50" />
+                  ) : (
+                    <div suppressHydrationWarning className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                        placeholder="Enter your password"
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
