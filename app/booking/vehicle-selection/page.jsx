@@ -80,9 +80,13 @@ export default function VehicleSelectionPage() {
           }
           const defaultCaps = { 'two-wheeler': 50, 'three-wheeler': 500, 'heavy-truck': 1000 }
           const transformedVehicles = data.map(vehicle => {
-            // Map backend id to our pricing keys
+            // Map backend vehicle to canonical pricing keys used by computeFare
             const typeLower = (vehicle.type || '').toLowerCase()
-            const pricingKey = vehicle.id || (typeLower.includes('truck') ? 'heavy-truck' : typeLower.includes('three') ? 'three-wheeler' : 'two-wheeler')
+            const hint = (vehicle.slug || vehicle.key || vehicle.code || '').toLowerCase()
+            const byHint = hint.includes('truck') ? 'heavy-truck' : hint.includes('three') ? 'three-wheeler' : hint.includes('two') ? 'two-wheeler' : ''
+            const byType = typeLower.includes('truck') ? 'heavy-truck' : typeLower.includes('three') ? 'three-wheeler' : typeLower.includes('two') ? 'two-wheeler' : ''
+            // IMPORTANT: do NOT use vehicle.id here; it might be a UUID and not a pricing key
+            const pricingKey = byHint || byType || 'two-wheeler'
             const fare = computeFare(pricingKey, distanceKm)
             const capacityKg = vehicle.capacityKg || defaultCaps[pricingKey]
             const isAvailFromCounts = (counts && Object.prototype.hasOwnProperty.call(counts, pricingKey)) ? (counts[pricingKey] > 0) : true
